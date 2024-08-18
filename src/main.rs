@@ -1,3 +1,7 @@
+use clap::Parser;
+use git_rs::command::SimpleGit;
+
 fn main() {
-    println!("Hello, world!");
+    let cmd = SimpleGit::parse();
+    println!("{:?}", cmd);
 }
