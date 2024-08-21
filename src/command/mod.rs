@@ -18,6 +18,9 @@ pub enum GitSubCommand {
         about = "Create a new commit containing the current contents of the index and the given log message describing the changes"
     )]
     Commit(CommitOpts),
+
+    #[command(name = "log", about = "show commit logs")]
+    Log(LogOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -74,4 +77,49 @@ pub struct CommitOpts {
     /// Replace the tip of the current branch by creating a new commit.
     #[arg(long)]
     pub amend: bool,
+}
+
+#[derive(Debug, Parser)]
+pub struct LogOpts {
+    /// This is a shorthand for "--pretty=oneline --abbrev-commit" used together.
+    #[arg(short, long = "oneline")]
+    pub oneline: bool,
+
+    #[arg(short, long)]
+    pub number: i32,
+
+    /// Limit the number of commits to output.
+    #[arg(long = "max-count")]
+    pub max_count: i32,
+
+    /// Skip number commits before starting to show the commit output.
+    #[arg(long = "skip")]
+    pub skip: i32,
+
+    /// Show commits more recent than a specific date.
+    #[arg(long = "since")]
+    pub since: String,
+    /// Show commits more recent than a specific date.
+    #[arg(long = "after")]
+    pub after: String,
+    /// Show commits older than a specific date.
+    #[arg(long = "until")]
+    pub until: String,
+    /// Show commits older than a specific date.
+    #[arg(long = "before")]
+    pub before: String,
+
+    /// --author=<pattern>, --committer=<pattern>
+    #[arg(long = "author")]
+    pub author: String,
+    /// commiter
+    #[arg(long = "committer")]
+    pub committer: String,
+
+    /// Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline,
+    #[arg(long = "pretty")]
+    pub pretty: String,
+    /// Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline,
+    #[arg(long = "format")]
+    pub format: String,
 }

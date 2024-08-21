@@ -1,5 +1,30 @@
 # Change Log
 
+## 24-08-21
+
+```sh
+git-rs git:(main) ✗ cargo run -- help log
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/git-rs help log`
+show commit logs
+
+Usage: git-rs log [OPTIONS] --number <NUMBER> --max-count <MAX_COUNT> --skip <SKIP> --since <SINCE> --after <AFTER> --until <UNTIL> --before <BEFORE> --author <AUTHOR> --committer <COMMITTER> --pretty <PRETTY> --format <FORMAT>
+
+Options:
+  -o, --oneline                This is a shorthand for "--pretty=oneline --abbrev-commit" used together
+  -n, --number <NUMBER>
+      --max-count <MAX_COUNT>  Limit the number of commits to output
+      --skip <SKIP>            Skip number commits before starting to show the commit output
+      --since <SINCE>          Show commits more recent than a specific date
+      --after <AFTER>          Show commits more recent than a specific date
+      --until <UNTIL>          Show commits older than a specific date
+      --before <BEFORE>        Show commits older than a specific date
+      --author <AUTHOR>        --author=<pattern>, --committer=<pattern>
+      --committer <COMMITTER>  commiter
+      --pretty <PRETTY>        Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline,
+      --format <FORMAT>        Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline,
+  -h, --help                   Print help
+```
 
 ## 24-08-19
 
