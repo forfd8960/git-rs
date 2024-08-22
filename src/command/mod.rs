@@ -18,9 +18,10 @@ pub enum GitSubCommand {
         about = "Create a new commit containing the current contents of the index and the given log message describing the changes"
     )]
     Commit(CommitOpts),
-
     #[command(name = "log", about = "show commit logs")]
     Log(LogOpts),
+    #[command(name = "branch", about = "git-branch - List, create, or delete branches")]
+    Branch(BranchOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -122,4 +123,24 @@ pub struct LogOpts {
     /// Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline,
     #[arg(long = "format")]
     pub format: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct BranchOpts {
+    /// delete a branch
+    #[arg(short, long)]
+    pub delete: String,
+
+    /// Move/rename a branch, together with its config and reflog.
+    #[arg(short='m', long="move")]
+    pub move_branch: String,
+
+    /// Copy a branch, together with its config and reflog.
+    #[arg(short, long)]
+    pub copy: String,
+
+    /// List branches. With optional <pattern>...,
+    /// e.g. git branch --list 'maint-*', list only the branches that match the pattern(s).
+    #[arg(short, long)]
+    pub list: String,
 }

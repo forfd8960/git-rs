@@ -1,5 +1,25 @@
 # Change Log
 
+## 24-08-22
+
+```sh
+cargo run -- help branch
+   Compiling git-rs v0.1.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.99s
+     Running `target/debug/git-rs help branch`
+git-branch - List, create, or delete branches
+
+Usage: git-rs branch --delete <DELETE> --move <MOVE_BRANCH> --copy <COPY> --list <LIST>
+
+Options:
+  -d, --delete <DELETE>     delete a branch
+  -m, --move <MOVE_BRANCH>  Move/rename a branch, together with its config and reflog
+  -c, --copy <COPY>         Copy a branch, together with its config and reflog
+  -l, --list <LIST>         List branches. With optional <pattern>..., e.g. git branch --list 'maint-*', list only the branches that match the pattern(s)
+  -h, --help                Print help
+
+```
+
 ## 24-08-21
 
 ```sh
