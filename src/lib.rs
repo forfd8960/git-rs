@@ -1,4 +1,5 @@
 pub mod command;
+pub mod errors;
 pub mod objects;
 pub mod plumbing;
 pub mod repo;

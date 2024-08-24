@@ -1,3 +1,6 @@
+pub mod decoder;
+pub mod encoder;
+
 /*
 // Stage during merge
 type Stage int
@@ -62,6 +65,7 @@ pub struct Entry {
 // type Tree struct {
 // 	Entries []TreeEntry
 // }
+#[derive(Debug)]
 pub struct Tree {
     pub entries: Vec<TreeEntry>,
 }
@@ -69,6 +73,7 @@ pub struct Tree {
 /*
 // TreeEntry entry of a cached Tree
 */
+#[derive(Debug)]
 pub struct TreeEntry {
     pub path: String,
     pub entries: i32,
@@ -79,6 +84,7 @@ pub struct TreeEntry {
 // Index contains the information about which objects are currently checked out
 // in the worktree, having information about the working files. Changes in
 // worktree are detected using this Index. The Index is also used during merges
+#[derive(Debug)]
 pub struct Index {
     pub version: u32,
     pub entries: Vec<Entry>,
@@ -88,7 +94,7 @@ pub struct Index {
 impl Index {
     pub fn new() -> Self {
         Index {
-            version: 0,
+            version: 2,
             entries: Vec::new(),
             cache: Tree {
                 entries: Vec::new(),

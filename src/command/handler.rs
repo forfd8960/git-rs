@@ -1,6 +1,6 @@
 use std::env;
 
-use crate::repo::Repository;
+use crate::{repo::Repository, worktree::Worktree};
 
 use super::GitSubCommand;
 
@@ -14,7 +14,11 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         }
         GitSubCommand::Add(opts) => {
             println!("add file options: {:?}", opts);
-            todo!()
+            let current_dir = env::current_dir().unwrap();
+            let root = current_dir.to_str().unwrap();
+
+            let mut work_tree = Worktree::new(root.to_string());
+            work_tree.add()?
         }
         GitSubCommand::Commit(opts) => {
             todo!()

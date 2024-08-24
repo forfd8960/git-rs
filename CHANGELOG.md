@@ -1,5 +1,15 @@
 # Change Log
 
+## 24-08-24 parse git index
+
+```sh
+✗ ./git-rs add --path .
+SimpleGit { command: Add(AddOpts { path_spec: ".", all: false }) }
+add file options: AddOpts { path_spec: ".", all: false }
+version: 2
+Index { version: 2, entries: [], cache: Tree { entries: [] } }
+```
+
 ## 24-08-24
 
 ```sh
