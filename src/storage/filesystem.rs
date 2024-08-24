@@ -2,7 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::plumbing;
+use crate::plumbing::{self, reference};
 
 use super::Store;
 
@@ -16,6 +16,17 @@ impl FileSystem {
         FileSystem {
             root: path.to_string(),
         }
+    }
+
+    pub(crate) fn create_and_write_file(file_path: &str, content: &str) -> anyhow::Result<()> {
+        println!("create: {}, and write: {}", file_path, content);
+        let mut file = fs::File::create(file_path)?;
+        if content == "" {
+            return Ok(());
+        }
+
+        file.write_all(content.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -50,20 +61,19 @@ impl Store for FileSystem {
         }
 
         // create the files
-        let files = [plumbing::HEAD, "config", "description"];
-        for file in files {
-            let sub_file = format!("{}/{}", full_path, file);
-            let _ = fs::File::create(sub_file)?;
-        }
+        let head_file = format!("{}/{}", full_path, plumbing::HEAD);
+        
+        Self::create_and_write_file(
+            &head_file,
+            &format!("{}{}\n", reference::SYM_REF_PREFIX, plumbing::MAIN),
+        )?;
 
-        let main_ref_path = format!("{}/{}", full_path, plumbing::HEAD);
-        Self::set_head(&main_ref_path, "ref: refs/heads/master")?;
-        Ok(())
-    }
+        let conf_file = format!("{}/{}", full_path, "config");
+        Self::create_and_write_file(&conf_file, "")?;
 
-    fn set_head(file: &str, ref_content: &str) -> anyhow::Result<()> {
-        let mut ref_f = fs::File::open(file)?;
-        let _ = ref_f.write_all(ref_content.as_bytes())?;
+        let desc_file = format!("{}/{}", full_path, "description");
+        Self::create_and_write_file(&desc_file, "")?;
+
         Ok(())
     }
 }
