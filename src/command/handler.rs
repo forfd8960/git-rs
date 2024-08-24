@@ -7,12 +7,13 @@ use super::GitSubCommand;
 pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
     match cmd {
         GitSubCommand::Init(opts) => {
-            println!("init repo optiond: {:?}", opts);
+            println!("init repo options: {:?}", opts);
             let current_dir = env::current_dir().unwrap();
             let repo = Repository::new(current_dir.to_str().unwrap());
             repo.init()?;
         }
         GitSubCommand::Add(opts) => {
+            println!("add file options: {:?}", opts);
             todo!()
         }
         GitSubCommand::Commit(opts) => {

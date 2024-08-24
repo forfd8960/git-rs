@@ -1,5 +1,17 @@
 # Change Log
 
+## 24-08-24
+
+```sh
+./git-rs init
+SimpleGit { command: Init(InitOpts { quiet: false, object_format: Some("sha1"), ref_format: Some("files"), template: None, branch: None }) }
+init repo optiond: InitOpts { quiet: false, object_format: Some("sha1"), ref_format: Some("files"), template: None, branch: None }
+create: how-git-works1/.git/HEAD, and write: ref: refs/heads/main
+
+create: how-git-works1/.git/config, and write:
+create: how-git-works1/.git/description, and write:
+```
+
 ## 24-08-22
 
 ```sh
