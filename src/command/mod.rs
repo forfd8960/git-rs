@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+pub mod handler;
+
 #[derive(Debug, Parser)]
 #[command(name="simple-git", version="0.0.1", about, long_about = None)]
 pub struct SimpleGit {
@@ -20,7 +22,10 @@ pub enum GitSubCommand {
     Commit(CommitOpts),
     #[command(name = "log", about = "show commit logs")]
     Log(LogOpts),
-    #[command(name = "branch", about = "git-branch - List, create, or delete branches")]
+    #[command(
+        name = "branch",
+        about = "git-branch - List, create, or delete branches"
+    )]
     Branch(BranchOpts),
 }
 
@@ -32,18 +37,18 @@ pub struct InitOpts {
 
     /// Specify the given object <format> (hash algorithm) for the repository. The valid values are sha1 and (if enabled) sha256. sha1 is the default.
     #[arg(long = "object-format", default_value = "sha1")]
-    pub object_format: String,
+    pub object_format: Option<String>,
 
     #[arg(long = "ref-format", default_value = "files")]
-    pub ref_format: String,
+    pub ref_format: Option<String>,
 
     /// Specify the directory from which templates will be used.
     #[arg(long = "template")]
-    pub template: String,
+    pub template: Option<String>,
 
     /// Use <branch-name> for the initial branch in the newly created repository. If not specified, fall back to the default name.
     #[arg(short, long = "initial-branch")]
-    pub branch: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -132,7 +137,7 @@ pub struct BranchOpts {
     pub delete: String,
 
     /// Move/rename a branch, together with its config and reflog.
-    #[arg(short='m', long="move")]
+    #[arg(short = 'm', long = "move")]
     pub move_branch: String,
 
     /// Copy a branch, together with its config and reflog.
