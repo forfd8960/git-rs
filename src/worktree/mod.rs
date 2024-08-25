@@ -1,6 +1,10 @@
-use std::fs::File;
+use std::{fs::File, io::Read};
 
-use crate::plumbing::index::{decoder, Index};
+use crate::plumbing::{
+    hash,
+    index::Index,
+    object::{self, ObjectType},
+};
 
 pub struct Worktree {
     root: String,
@@ -11,13 +15,29 @@ impl Worktree {
         Worktree { root }
     }
 
-    pub fn add(&mut self) -> anyhow::Result<()> {
-        let current_dir = std::env::current_dir()?;
-        let path = current_dir.join(".git/index");
-        let idx_file: &str = path.to_str().unwrap();
-        let index = Index::build(idx_file)?;
+    pub fn add(&mut self, add_file: &str) -> anyhow::Result<()> {
+        let current_dir = self.root.clone();
 
+        let dot_git = current_dir.clone() + "/.git";
+        println!("dot_git: {}", dot_git);
+
+        let index_path = dot_git.clone() + "/index";
+        let index = Index::build(&index_path)?;
         println!("{:?}", index);
+
+        let file_path = current_dir.clone() + "/" + add_file;
+        println!("file_path: {}", file_path);
+
+        let mut file = File::open(file_path)?;
+        let mut content = Vec::new();
+        file.read_to_end(&mut content)?;
+
+        let hash_str = hash::compute_hash(&ObjectType::BlobObject, content.as_ref());
+        println!("hash: {}", hash_str);
+
+        let obj_blob_path = object::write_blob(content, &hash_str)?;
+
+        println!("successfully write object to: {}", obj_blob_path);
         Ok(())
     }
 }

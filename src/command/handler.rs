@@ -18,7 +18,7 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
             let root = current_dir.to_str().unwrap();
 
             let mut work_tree = Worktree::new(root.to_string());
-            work_tree.add()?
+            work_tree.add(&opts.path_spec)?
         }
         GitSubCommand::Commit(opts) => {
             todo!()

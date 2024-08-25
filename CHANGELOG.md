@@ -1,5 +1,30 @@
 # Change Log
 
+## 24-08-25-01
+
+* use zlib to compress blob bytes
+
+```sh
+hash: d53bfed792e3b78e556331e4e2d134b3d4dc4e20
+[write_blob] blob dir: .git/objects/d5
+[write_blob] file_name: .git/objects/d5/3bfed792e3b78e556331e4e2d134b3d4dc4e20
+created file
+successfully write object to: .git/objects/d5/3bfed792e3b78e556331e4e2d134b3d4dc4e20
+```
+
+* check with git cat-file
+
+```sh
+> cat git_obj.txt
+0825 add git object
+
+> git cat-file -t d53bfed792e3b78e556331e4e2d134b3d4dc4e20
+blob
+
+> git cat-file -p d53bfed
+0825 add git object
+```
+
 ## 24-08-25
 
 * parse index entry
