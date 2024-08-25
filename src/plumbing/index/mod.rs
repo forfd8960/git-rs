@@ -17,7 +17,9 @@ const (
 )
 */
 
-use std::time;
+use std::{fmt::Display, time};
+
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub enum Stage {
@@ -52,7 +54,7 @@ pub struct Entry {
     pub size: u32,
     // Stage on a merge is defines what stage is representing this entry
     // https://git-scm.com/book/en/v2/Git-Tools-Advanced-Merging
-    pub stage: Stage,
+    pub stage: u16,
     // skip_worktree used in sparse checkouts
     // https://git-scm.com/docs/git-read-tree#_sparse_checkout
     pub skip_worktree: bool,
@@ -114,12 +116,54 @@ impl Index {
             uid: 0,
             gid: 0,
             size: 0,
-            stage: Stage::Merged,
+            stage: 0,
             skip_worktree: false,
             intent_to_add: false,
         };
 
         self.entries.push(e.clone());
         e
+    }
+}
+
+impl Entry {
+    pub fn new() -> Self {
+        Entry {
+            hash: Vec::new(),
+            name: "".to_string(),
+            created_at: time::SystemTime::now(),
+            modified_at: time::SystemTime::now(),
+            dev: 0,
+            inode: 0,
+            mode: 0,
+            uid: 0,
+            gid: 0,
+            size: 0,
+            stage: 0,
+            skip_worktree: false,
+            intent_to_add: false,
+        }
+    }
+}
+
+impl Display for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "hash: {:?} ", self.hash)?;
+        write!(f, "name: {} ", self.name)?;
+        //  // Convert SystemTime to DateTime<Utc>
+        let create_utc: DateTime<Utc> = self.created_at.into();
+        write!(
+            f,
+            "created_at: {} ",
+            create_utc.format("%Y-%m-%d %H:%M:%S%.9f")
+        )?;
+
+        let modified_utc: DateTime<Utc> = self.modified_at.into();
+        write!(
+            f,
+            "modified_at: {}\n",
+            modified_utc.format("%Y-%m-%d %H:%M:%S%.9f")
+        )?;
+        Ok(())
     }
 }

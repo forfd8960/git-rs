@@ -16,7 +16,7 @@ impl Worktree {
         let index_file_path = self.root.clone() + "/.git/index";
 
         let index_reader = File::open(index_file_path)?;
-        let mut index_decoder = decoder::Decoder::new(Box::new(index_reader));
+        let mut index_decoder = decoder::Decoder::new(index_reader);
         index_decoder.decode(&mut idx)?;
 
         println!("{:?}", idx);
