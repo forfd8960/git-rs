@@ -5,4 +5,5 @@ pub const MAIN: &'static str = "refs/heads/main";
 pub mod filemode;
 pub mod hash;
 pub mod index;
+pub mod object;
 pub mod reference;

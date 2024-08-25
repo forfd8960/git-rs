@@ -12,14 +12,12 @@ impl Worktree {
     }
 
     pub fn add(&mut self) -> anyhow::Result<()> {
-        let mut idx = Index::new();
-        let index_file_path = self.root.clone() + "/.git/index";
+        let current_dir = std::env::current_dir()?;
+        let path = current_dir.join(".git/index");
+        let idx_file: &str = path.to_str().unwrap();
+        let index = Index::build(idx_file)?;
 
-        let index_reader = File::open(index_file_path)?;
-        let mut index_decoder = decoder::Decoder::new(index_reader);
-        index_decoder.decode(&mut idx)?;
-
-        println!("{:?}", idx);
+        println!("{:?}", index);
         Ok(())
     }
 }

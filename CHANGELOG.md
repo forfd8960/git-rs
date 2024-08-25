@@ -1,5 +1,49 @@
 # Change Log
 
+## 24-08-25
+
+* parse index entry
+
+```sh
+./git-rs add --path .
+SimpleGit { command: Add(AddOpts { path_spec: ".", all: false }) }
+add file options: AddOpts { path_spec: ".", all: false }
+index version: 2
+entry_count: 4
+reading the 0 entry
+entry hash: "�k�m1]F(\u{b}��TaL�-\u{16}w��"
+flags: 11
+stage: 0
+name length: 11
+name: bak/new.txt
+pad entry: 62
+push entry to index
+reading the 1 entry
+entry hash: "��Se���\u{3}����\t�\u{c}�,8�"
+flags: 12
+stage: 0
+name length: 12
+name: bak/test.txt
+pad entry: 62
+push entry to index
+reading the 2 entry
+entry hash: "�k�m1]F(\u{b}��TaL�-\u{16}w��"
+flags: 7
+stage: 0
+name length: 7
+name: new.txt
+pad entry: 62
+push entry to index
+reading the 3 entry
+entry hash: "�7�Å�:\u{e}\u{1}�9c0�\u{1a}��\u{18}��"
+flags: 8
+stage: 0
+name length: 8
+name: test.txt
+pad entry: 62
+push entry to index
+```
+
 ## 24-08-24 parse git index
 
 ```sh

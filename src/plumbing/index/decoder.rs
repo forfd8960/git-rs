@@ -143,7 +143,6 @@ impl Decoder {
         println!("name: {}", entry.name);
         self.pad_entry(&entry, read_len)?;
 
-        println!("push entry to index");
         idx.entries.push(entry);
 
         Ok(())

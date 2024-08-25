@@ -17,9 +17,11 @@ const (
 )
 */
 
-use std::{fmt::Display, time};
+use std::{fmt::Display, fs::File, time};
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
+use decoder::Decoder;
 
 #[derive(Debug, Clone)]
 pub enum Stage {
@@ -102,6 +104,15 @@ impl Index {
                 entries: Vec::new(),
             },
         }
+    }
+
+    pub fn build(index_path: &str) -> Result<Self> {
+        let mut idx = Index::new();
+
+        let index_reader = File::open(index_path)?;
+        let mut index_decoder = Decoder::new(index_reader);
+        index_decoder.decode(&mut idx)?;
+        Ok(idx)
     }
 
     pub fn add(&mut self, path: String) -> Entry {
