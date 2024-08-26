@@ -1,5 +1,6 @@
 pub mod command;
 pub mod errors;
+pub mod multiwriter;
 pub mod objects;
 pub mod plumbing;
 pub mod repo;

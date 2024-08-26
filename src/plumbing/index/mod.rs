@@ -22,6 +22,7 @@ use std::{fmt::Display, fs::File, time};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use decoder::Decoder;
+use encoder::Encoder;
 
 const INDEX_SIG: [u8; 4] = [b'D', b'I', b'R', b'C'];
 const INDEX_VERSION_MIN: u32 = 2;
@@ -124,6 +125,12 @@ impl Index {
         let mut index_decoder = Decoder::new(index_reader);
         index_decoder.decode(&mut idx)?;
         Ok(idx)
+    }
+
+    pub fn set(mut index: Index, file: File) -> Result<()> {
+        let mut idx_encoder: Encoder = Encoder::new(file);
+        idx_encoder.encode(&mut index)?;
+        Ok(())
     }
 
     pub fn entry(&self, path: &str) -> Option<&Entry> {

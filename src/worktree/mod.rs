@@ -53,6 +53,11 @@ impl Worktree {
             self.fill_entry(&mut e, blob_name, &hash_str, &add_file_metadata)?;
             index.add(&e);
         }
+
+        // write index to index file
+        let index_file = File::open(&index_path)?;
+        Index::set(index, index_file)?;
+
         Ok(())
     }
 

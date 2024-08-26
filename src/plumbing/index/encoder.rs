@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
+use sha1_checked::{Digest, Sha1};
 use std::{
     fs::File,
     io::{BufWriter, Write},
@@ -9,6 +10,7 @@ use std::{
 use super::{Entry, Index, ENTRY_HEADER_LENGTH, ENTRY_NAME_MASK, INDEX_SIG};
 
 pub struct Encoder {
+    buf: Vec<u8>,
     writer: BufWriter<File>,
 }
 
@@ -16,20 +18,29 @@ impl Encoder {
     pub fn new(file: File) -> Self {
         Encoder {
             writer: BufWriter::new(file),
+            buf: Vec::new(),
         }
     }
 
     pub fn encode(&mut self, index: &mut Index) -> anyhow::Result<()> {
         self.encode_header(index)?;
         self.encode_entries(index)?;
+        self.encode_footer()?;
+
+        self.writer.flush()?;
         Ok(())
     }
 
     fn encode_header(&mut self, index: &mut Index) -> anyhow::Result<()> {
         self.writer.write_all(&INDEX_SIG)?;
+        self.buf.extend_from_slice(&INDEX_SIG);
+
         self.writer.write_u32::<BigEndian>(index.version)?;
-        self.writer
-            .write_u32::<BigEndian>(index.entries.len() as u32)?;
+        self.buf.write_u32::<BigEndian>(index.version)?;
+
+        let entry_count = index.entries.len() as u32;
+        self.writer.write_u32::<BigEndian>(entry_count)?;
+        self.buf.write_u32::<BigEndian>(entry_count)?;
         Ok(())
     }
 
@@ -67,28 +78,45 @@ impl Encoder {
         ])?;
 
         self.writer.write_all(&entry.hash)?;
-        self.writer.write_u16::<BigEndian>(set_flags(&entry))?;
+        self.buf.extend_from_slice(&entry.hash);
+
+        let flags = set_flags(&entry);
+        self.writer.write_u16::<BigEndian>(flags)?;
+        self.buf.write_u16::<BigEndian>(flags)?;
+
         self.writer.write_all(entry.name.as_bytes())?;
+        self.buf.extend_from_slice(entry.name.as_bytes());
 
         Ok(())
     }
 
     fn pad_entry(&mut self, wrote: u32) -> anyhow::Result<()> {
         let pad_len = 8 - wrote % 8;
-        let mut buf = Vec::with_capacity(pad_len as usize);
-        buf.extend(std::iter::repeat(b'\x00').take(pad_len as usize));
 
+        let mut buf = Vec::with_capacity(pad_len as usize);
+        buf.extend(iter::repeat(b'\x00').take(pad_len as usize));
+
+        let sha_buf = buf.clone();
         self.writer.write_all(buf.as_slice())?;
+        self.buf.extend_from_slice(sha_buf.as_slice());
         Ok(())
     }
 
-    fn encode_footer(&mut self, index: &mut Index) -> anyhow::Result<()> {
+    fn encode_footer(&mut self) -> anyhow::Result<()> {
+        let mut hasher = Sha1::new();
+        hasher.update(self.buf.as_slice());
+
+        let result = hasher.try_finalize();
+        let hash_str = base16ct::lower::encode_string(result.hash().as_ref());
+
+        self.writer.write_all(hash_str.as_bytes())?;
         Ok(())
     }
 
     fn write_multiple_data(&mut self, data: Vec<u32>) -> anyhow::Result<()> {
         for d in data {
             self.writer.write_u32::<BigEndian>(d)?;
+            self.buf.write_u32::<BigEndian>(d)?;
         }
         Ok(())
     }

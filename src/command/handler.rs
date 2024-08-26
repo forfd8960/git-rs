@@ -29,6 +29,9 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         GitSubCommand::Branch(opts) => {
             todo!()
         }
+        GitSubCommand::UpdateIndex(opts) => {
+            todo!()
+        }
     }
     Ok(())
 }

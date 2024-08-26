@@ -27,6 +27,9 @@ pub enum GitSubCommand {
         about = "git-branch - List, create, or delete branches"
     )]
     Branch(BranchOpts),
+
+    #[command(name = "update-index")]
+    UpdateIndex(UpdateIndexOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -149,3 +152,6 @@ pub struct BranchOpts {
     #[arg(short, long)]
     pub list: String,
 }
+
+#[derive(Debug, Parser)]
+pub struct UpdateIndexOpts {}
