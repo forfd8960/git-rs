@@ -23,15 +23,22 @@ impl Encoder {
     }
 
     pub fn encode(&mut self, index: &mut Index) -> anyhow::Result<()> {
+        println!("encoding index");
+
         self.encode_header(index)?;
         self.encode_entries(index)?;
         self.encode_footer()?;
 
+        println!("flush into writer");
         self.writer.flush()?;
+
+        println!("encode done");
         Ok(())
     }
 
     fn encode_header(&mut self, index: &mut Index) -> anyhow::Result<()> {
+        println!("encoding headers");
+
         self.writer.write_all(&INDEX_SIG)?;
         self.buf.extend_from_slice(&INDEX_SIG);
 
@@ -45,10 +52,13 @@ impl Encoder {
     }
 
     fn encode_entries(&mut self, index: &mut Index) -> anyhow::Result<()> {
+        println!("encoding entries");
         index.entries.sort_by(|a, b| a.name.cmp(&b.name));
-        for entry in &index.entries {
-            self.encode_entry(entry)?;
 
+        for entry in &index.entries {
+            println!("encoding entry: {}", entry.name);
+
+            self.encode_entry(entry)?;
             let mut entry_len = ENTRY_HEADER_LENGTH;
             if entry.intent_to_add || entry.skip_worktree {
                 entry_len += 2
@@ -77,6 +87,13 @@ impl Encoder {
             entry.size,
         ])?;
 
+        println!(
+            "[encode_entry] entry: {} hash: {:?}, len: {}",
+            entry.name,
+            String::from_utf8_lossy(&entry.hash),
+            entry.hash.len(),
+        );
+
         self.writer.write_all(&entry.hash)?;
         self.buf.extend_from_slice(&entry.hash);
 
@@ -103,13 +120,16 @@ impl Encoder {
     }
 
     fn encode_footer(&mut self) -> anyhow::Result<()> {
+        println!("encoding footer");
+
         let mut hasher = Sha1::new();
         hasher.update(self.buf.as_slice());
 
         let result = hasher.try_finalize();
-        let hash_str = base16ct::lower::encode_string(result.hash().as_ref());
+        let sha1_hash = result.hash();
+        self.writer.write_all(sha1_hash.as_slice())?;
 
-        self.writer.write_all(hash_str.as_bytes())?;
+        println!("write footer done");
         Ok(())
     }
 

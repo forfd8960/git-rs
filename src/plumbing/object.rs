@@ -43,7 +43,7 @@ pub fn object_type_string(object_type: &ObjectType) -> &'static str {
     }
 }
 
-pub fn write_blob(content: Vec<u8>, hash_str: &str) -> anyhow::Result<String> {
+pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String> {
     let content_bytes = content;
     let content_len = content_bytes.len();
     let header = format!("blob {}\0", content_len);
@@ -51,7 +51,9 @@ pub fn write_blob(content: Vec<u8>, hash_str: &str) -> anyhow::Result<String> {
 
     blob_bs.extend_from_slice(content_bytes.as_slice());
 
-    let (blob_dir, file_name) = get_blob_path(hash_str);
+    let hash_str = base16ct::lower::encode_string(hash_bytes);
+
+    let (blob_dir, file_name) = get_blob_path(&hash_str);
     println!("[write_blob] blob dir: {}", blob_dir.clone());
     println!("[write_blob] file_name: {}", file_name.clone());
 

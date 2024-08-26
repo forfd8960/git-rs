@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::Read,
     os::unix::fs::MetadataExt,
     path::Path,
@@ -27,7 +27,7 @@ impl Worktree {
         println!("dot_git: {}", dot_git);
 
         let index_path = dot_git.clone() + "/index";
-        let mut index = Index::build(&index_path)?;
+        let mut index = Index::from(&index_path)?;
         println!("{:?}", index);
 
         let file_path = current_dir.clone() + "/" + add_file;
@@ -37,25 +37,34 @@ impl Worktree {
         let mut content = Vec::new();
         file.read_to_end(&mut content)?;
 
-        let hash_str = hash::compute_hash(&ObjectType::BlobObject, content.as_ref());
-        println!("hash: {}", hash_str);
+        let hash_bytes = hash::compute_hash(&ObjectType::BlobObject, content.as_ref());
+        println!("hash: {:?}, len: {}", hash_bytes, hash_bytes.len());
 
-        let obj_blob_path = object::write_blob(content, &hash_str)?;
+        let obj_blob_path = object::write_blob(content, &hash_bytes)?;
         println!("successfully write object to: {}", obj_blob_path);
 
+        println!("getting file metadata");
         let add_file_metadata = file.metadata()?;
+        println!("add_file_metadata: {:?}", add_file_metadata);
+
         let blob_name = get_filename(&file_path);
         if let Some(e) = index.entry(blob_name) {
             // update entry to index
         } else {
             // add entry to index
             let mut e = Entry::new();
-            self.fill_entry(&mut e, blob_name, &hash_str, &add_file_metadata)?;
+            self.fill_entry(&mut e, blob_name, &hash_bytes, &add_file_metadata)?;
             index.add(&e);
         }
 
         // write index to index file
-        let index_file = File::open(&index_path)?;
+        let index_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&index_path)?;
+
+        println!("set index file back to: {}", index_path);
         Index::set(index, index_file)?;
 
         Ok(())
@@ -65,11 +74,11 @@ impl Worktree {
         &self,
         e: &mut Entry,
         filename: &str,
-        hash: &str,
+        hash_bytes: &[u8],
         metdata: &fs::Metadata,
     ) -> anyhow::Result<()> {
         e.name = filename.to_string();
-        e.hash = hash.as_bytes().to_vec();
+        e.hash = hash_bytes.to_vec();
         e.created_at = metdata.created()?;
         e.modified_at = metdata.modified()?;
         e.size = metdata.size() as u32;
@@ -78,8 +87,19 @@ impl Worktree {
 
         //todo: set mode from file mode
         e.mode = filemode::REGULAR;
+        e.stage = 0;
         e.gid = metdata.gid() as u32;
         e.uid = metdata.uid() as u32;
+        Ok(())
+    }
+
+    pub fn read_index(&self) -> anyhow::Result<()> {
+        let current_dir = self.root.clone();
+        let dot_git = current_dir.clone() + "/.git";
+
+        let index_path = dot_git.clone() + "/index";
+        let index = Index::from(&index_path)?;
+        println!("{}", index);
         Ok(())
     }
 }

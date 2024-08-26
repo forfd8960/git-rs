@@ -1,5 +1,82 @@
 # Change Log
 
+## 2408-26
+
+* Fix compute sha1 hash
+* Fix write index back to disk
+
+```sh
+> git init
+Initialized empty Git repository how-git-works1/.git/
+how-git-works1 (main)> git add test.txt
+
+how-git-works1 (main)> ./git-rs read-index
+SimpleGit { command: ReadIndex }
+index version: 2
+entry_count: 1
+reading the 0 entry
+entry hash: "�\u{1}6%\u{3}\u{b}�۩\u{6}�V�\u{7f}����FJ"
+flags: 8
+stage: 0
+name length: 8
+name: test.txt
+pad entry: 62
+version: 2
+hash: �6%
+         �۩�V�����FJ
+name: test.txt, size: 6
+mode: 100644 created_at: 2024-09-01 12:23:24.061000000 modified_at: 2024-09-01 12:23:24.061000000
+
+how-git-works1 (main)> ./git-rs add --path git_obj_0826_6.txt
+SimpleGit { command: Add(AddOpts { path_spec: "git_obj_0826_6.txt", all: false }) }
+add file options: AddOpts { path_spec: "git_obj_0826_6.txt", all: false }
+dot_git: how-git-works1/.git
+index version: 2
+entry_count: 1
+reading the 0 entry
+entry hash: "�\u{1}6%\u{3}\u{b}�۩\u{6}�V�\u{7f}����FJ"
+flags: 8
+stage: 0
+name length: 8
+name: test.txt
+pad entry: 62
+Index { version: 2, entries: [Entry { hash: [206, 1, 54, 37, 3, 11, 168, 219, 169, 6, 247, 86, 150, 127, 158, 156, 163, 148, 70, 74], name: "test.txt", created_at: SystemTime { tv_sec: 1725193404, tv_nsec: 61000000 }, modified_at: SystemTime { tv_sec: 1725193404, tv_nsec: 61000000 }, dev: 16777232, inode: 43762421, mode: 33188, uid: 501, gid: 20, size: 6, stage: 0, skip_worktree: false, intent_to_add: false }], cache: Tree { entries: [] } }
+file_path: how-git-works1/git_obj_0826_6.txt
+hash: [174, 107, 166, 193, 20, 254, 123, 181, 84, 119, 23, 227, 178, 127, 25, 248, 19, 25, 111, 30], len: 20
+[write_blob] blob dir: .git/objects/ae
+[write_blob] file_name: .git/objects/ae/6ba6c114fe7bb5547717e3b27f19f813196f1e
+created file
+successfully write object to: .git/objects/ae/6ba6c114fe7bb5547717e3b27f19f813196f1e
+
+set index file back to: how-git-works1/.git/index
+encoding index
+encoding headers
+encoding entries
+encoding entry: git_obj_0826_6.txt
+[encode_entry] entry: git_obj_0826_6.txt hash: "�k��\u{14}�{�Tw\u{17}�\u{7f}\u{19}�\u{13}\u{19}o\u{1e}", len: 20
+encoding entry: test.txt
+[encode_entry] entry: test.txt hash: "�\u{1}6%\u{3}\u{b}�۩\u{6}�V�\u{7f}����FJ", len: 20
+encoding footer
+write footer done
+flush into writer
+encode done
+
+how-git-works1 (main)> git status
+On branch main
+
+No commits yet
+
+Changes to be committed:
+  (use "git rm --cached <file>..." to unstage)
+	new file:   git_obj_0826_6.txt
+	new file:   test.txt
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	git-rs
+
+```
+
 ## 24-08-25-01
 
 * use zlib to compress blob bytes

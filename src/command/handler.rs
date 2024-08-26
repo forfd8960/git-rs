@@ -5,6 +5,8 @@ use crate::{repo::Repository, worktree::Worktree};
 use super::GitSubCommand;
 
 pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
+    let current_dir = env::current_dir().unwrap();
+
     match cmd {
         GitSubCommand::Init(opts) => {
             println!("init repo options: {:?}", opts);
@@ -31,6 +33,12 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         }
         GitSubCommand::UpdateIndex(opts) => {
             todo!()
+        }
+
+        GitSubCommand::ReadIndex => {
+            let root = current_dir.to_str().unwrap();
+            let work_tree = Worktree::new(root.to_string());
+            work_tree.read_index()?
         }
     }
     Ok(())

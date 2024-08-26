@@ -30,6 +30,8 @@ pub enum GitSubCommand {
 
     #[command(name = "update-index")]
     UpdateIndex(UpdateIndexOpts),
+    #[command(name = "read-index")]
+    ReadIndex,
 }
 
 #[derive(Debug, Parser)]

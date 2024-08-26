@@ -118,7 +118,7 @@ impl Index {
         }
     }
 
-    pub fn build(index_path: &str) -> Result<Self> {
+    pub fn from(index_path: &str) -> Result<Self> {
         let mut idx = Index::new();
 
         let index_reader = File::open(index_path)?;
@@ -127,9 +127,9 @@ impl Index {
         Ok(idx)
     }
 
-    pub fn set(mut index: Index, file: File) -> Result<()> {
+    pub fn set(mut idx: Index, file: File) -> Result<()> {
         let mut idx_encoder: Encoder = Encoder::new(file);
-        idx_encoder.encode(&mut index)?;
+        idx_encoder.encode(&mut idx)?;
         Ok(())
     }
 
@@ -164,8 +164,15 @@ impl Entry {
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "hash: {:?} ", self.hash)?;
-        write!(f, "name: {} ", self.name)?;
+        write!(
+            f,
+            "hash: {}\n",
+            String::from_utf8_lossy(self.hash.as_slice())
+        )?;
+        write!(f, "name: {}, ", self.name)?;
+        write!(f, "size: {}\n", self.size)?;
+        write!(f, "mode: {:06o} ", self.mode)?;
+
         //  // Convert SystemTime to DateTime<Utc>
         let create_utc: DateTime<Utc> = self.created_at.into();
         write!(
@@ -180,6 +187,18 @@ impl Display for Entry {
             "modified_at: {}\n",
             modified_utc.format("%Y-%m-%d %H:%M:%S%.9f")
         )?;
+
+        Ok(())
+    }
+}
+
+impl Display for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "version: {} \n", self.version)?;
+        for e in &self.entries {
+            write!(f, "{}", e)?;
+        }
+
         Ok(())
     }
 }
