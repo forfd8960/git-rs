@@ -23,6 +23,17 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use decoder::Decoder;
 
+const INDEX_SIG: [u8; 4] = [b'D', b'I', b'R', b'C'];
+const INDEX_VERSION_MIN: u32 = 2;
+const INDEX_VERSION_MAX: u32 = 4;
+
+const ENTRY_HEADER_LENGTH: u32 = 62;
+const ENTRY_EXTENDED: u16 = 0x4000;
+const ENTRY_VALID: u32 = 0x8000;
+const ENTRY_NAME_MASK: u16 = 0xfff;
+const INTENT_TO_ADD_MASK: u16 = 1 << 13;
+const SKIP_WORKTREE_MASK: u16 = 1 << 14;
+
 #[derive(Debug, Clone)]
 pub enum Stage {
     Merged,       // Merged is the default stage, fully merged
@@ -115,25 +126,12 @@ impl Index {
         Ok(idx)
     }
 
-    pub fn add(&mut self, path: String) -> Entry {
-        let e = Entry {
-            hash: Vec::new(),
-            name: path,
-            created_at: time::SystemTime::now(),
-            modified_at: time::SystemTime::now(),
-            dev: 0,
-            inode: 0,
-            mode: 0,
-            uid: 0,
-            gid: 0,
-            size: 0,
-            stage: 0,
-            skip_worktree: false,
-            intent_to_add: false,
-        };
+    pub fn entry(&self, path: &str) -> Option<&Entry> {
+        self.entries.iter().find(|e| e.name == path)
+    }
 
+    pub fn add(&mut self, e: &Entry) {
         self.entries.push(e.clone());
-        e
     }
 }
 

@@ -8,31 +8,11 @@ use std::time::SystemTime;
 
 use crate::errors::GitError;
 use crate::plumbing::hash;
+use crate::plumbing::index::{
+    ENTRY_EXTENDED, ENTRY_HEADER_LENGTH, ENTRY_NAME_MASK, INTENT_TO_ADD_MASK, SKIP_WORKTREE_MASK,
+};
 
-use super::Entry;
-use super::Index;
-
-const INDEX_SIG: [u8; 4] = [b'D', b'I', b'R', b'C'];
-// DecodeVersionSupported = struct{ Min, Max uint32 }{Min: 2, Max: 4}
-const INDEX_VERSION_MIN: u32 = 2;
-const INDEX_VERSION_MAX: u32 = 4;
-
-/*
-const (
-    entryHeaderLength = 62
-    entryExtended     = 0x4000
-    entryValid        = 0x8000
-    nameMask          = 0xfff
-    intentToAddMask   = 1 << 13
-    skipWorkTreeMask  = 1 << 14
-)
-*/
-const ENTRY_HEADER_LENGTH: u32 = 62;
-const ENTRY_EXTENDED: u16 = 0x4000;
-const ENTRY_VALID: u32 = 0x8000;
-const ENTRY_NAME_MASK: u16 = 0xfff;
-const INTENT_TO_ADD_MASK: u16 = 1 << 13;
-const SKIP_WORKTREE_MASK: u16 = 1 << 14;
+use super::{Entry, Index, INDEX_SIG, INDEX_VERSION_MAX, INDEX_VERSION_MIN};
 
 pub struct Decoder {
     pub index_file: File,
