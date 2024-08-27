@@ -8,6 +8,9 @@ pub const SIZE: u16 = 20;
 // HexSize defines the strings size of the hash when represented in hexadecimal.
 pub const HEX_SIZE: u16 = 40;
 
+#[derive(Debug)]
+pub struct Hash(pub [u8; SIZE as usize]);
+
 pub fn compute_hash(t: &ObjectType, content: &[u8]) -> Vec<u8> {
     let mut hasher = Sha1::new();
     hasher.update(object_type_bytes(t));

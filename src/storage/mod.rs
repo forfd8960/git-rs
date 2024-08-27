@@ -1,3 +1,4 @@
+pub mod filesys;
 pub mod filesystem;
 
 use anyhow::Result;
