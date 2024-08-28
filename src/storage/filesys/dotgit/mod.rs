@@ -1,12 +1,12 @@
 use crate::plumbing::{
     hash::Hash,
-    reference::{Reference, ReferenceType},
+    reference::{Reference, ReferenceName, ReferenceType},
 };
 use anyhow::Result;
 use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::Path,
 };
 
@@ -67,5 +67,14 @@ impl DotGit {
         let path = format!("{}/{}", self.dot_git_path, r.name.0);
         self.create_file(&path, false, &content)?;
         Ok(())
+    }
+
+    pub fn get_ref(&self, r: ReferenceName) -> Result<Reference> {
+        let path = format!("{}/{}", self.dot_git_path, r.0);
+
+        let mut f = File::open(path)?;
+        let mut content = String::new();
+        f.read_to_string(&mut content)?;
+        Ok(Reference::new_from_target(r, content))
     }
 }

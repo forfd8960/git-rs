@@ -1,3 +1,5 @@
+use crate::storage::filesys::reference::ReferenceStore;
+use anyhow::Result;
 use std::fmt::Display;
 
 use super::hash::Hash;
@@ -27,6 +29,16 @@ pub struct Reference {
 }
 
 impl Reference {
+    pub fn new_from_target(n: ReferenceName, target: String) -> Self {
+        if target.starts_with(SYM_REF_PREFIX) {
+            let t = ReferenceName(target.replace(SYM_REF_PREFIX, ""));
+            return Reference::new_symbolic_ref(n, t);
+        }
+
+        let t = target.as_ref();
+        Reference::new_hash_ref(n, Hash::from(t))
+    }
+
     pub fn new_symbolic_ref(name: ReferenceName, target: ReferenceName) -> Self {
         Reference {
             ref_type: ReferenceType::SymbolicReference,
@@ -68,4 +80,8 @@ impl Display for ReferenceName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+pub fn resolve_reference(s: &ReferenceStore, ref_name: &ReferenceName) -> Result<Reference> {
+    todo!()
 }
