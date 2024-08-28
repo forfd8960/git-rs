@@ -1,24 +1,40 @@
-use crate::plumbing::hash::Hash;
+use crate::plumbing::{
+    hash::Hash,
+    reference::{Reference, ReferenceType},
+};
 use anyhow::Result;
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
+    io::Write,
     path::Path,
 };
 
-pub struct DotGit<'a> {
-    pub dot_git_path: &'a str,
-    pub object_list: Vec<&'a Hash>,
-    pub files: HashMap<&'a Hash, File>,
+#[derive(Debug)]
+pub struct DotGit {
+    pub dot_git_path: String,
+    pub object_list: Vec<Hash>,
+    pub files: HashMap<Hash, File>,
 }
 
-impl<'a> DotGit<'a> {
-    pub fn new(dot_git_path: &'a str) -> Self {
+impl DotGit {
+    pub fn new(dot_git_path: String) -> Self {
         DotGit {
             dot_git_path,
             object_list: Vec::new(),
             files: HashMap::new(),
         }
+    }
+
+    fn create_file(&self, path: &str, truncate: bool, content: &str) -> Result<()> {
+        let mut f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(truncate)
+            .open(path)?;
+
+        f.write_all(content.as_bytes())?;
+        Ok(())
     }
 
     pub fn initialize(&self) -> Result<()> {
@@ -34,9 +50,22 @@ impl<'a> DotGit<'a> {
                 continue;
             }
 
-            fs::create_dir(path.clone())?;
+            fs::create_dir_all(path.clone())?;
         }
 
+        Ok(())
+    }
+
+    //(todo): check old and truncate ref file
+    pub fn set_ref(&self, r: &Reference, old: Option<Reference>) -> Result<()> {
+        let content = match r.ref_type {
+            ReferenceType::SymbolicReference => format!("ref: {}\n", r.target.as_ref().unwrap()),
+            ReferenceType::HashReference => format!("{}\n", r.hash.as_ref().unwrap().to_string()),
+            _ => "".to_string(),
+        };
+
+        let path = format!("{}/{}", self.dot_git_path, r.name.0);
+        self.create_file(&path, false, &content)?;
         Ok(())
     }
 }

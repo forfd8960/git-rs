@@ -84,12 +84,12 @@ impl Decoder {
 
         let tm = SystemTime::UNIX_EPOCH
             + Duration::from_secs(sec as u64)
-            + Duration::from_millis(nsec as u64);
+            + Duration::from_nanos(nsec as u64);
 
         entry.created_at = tm;
         entry.modified_at = SystemTime::UNIX_EPOCH
             + Duration::from_secs(msec as u64)
-            + Duration::from_millis(mnsec as u64);
+            + Duration::from_nanos(mnsec as u64);
 
         entry.dev = self.read_u32()?;
         entry.inode = self.read_u32()?;
