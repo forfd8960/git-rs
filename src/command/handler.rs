@@ -1,6 +1,10 @@
-use std::env;
+use std::{collections::HashMap, env};
 
-use crate::{repo::Repository, worktree::Worktree};
+use crate::{
+    config::{Config, Core, User},
+    repo::Repository,
+    worktree::Worktree,
+};
 
 use super::GitSubCommand;
 
@@ -11,7 +15,13 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         GitSubCommand::Init(opts) => {
             println!("init repo options: {:?}", opts);
             let current_dir = env::current_dir().unwrap();
-            let repo = Repository::new(current_dir.to_str().unwrap());
+            let conf = Config::new(
+                Core::new(false, "".to_string(), "#".to_string(), "0".to_string()),
+                None,
+                HashMap::new(),
+            );
+
+            let repo = Repository::new(current_dir.to_str().unwrap(), conf);
             repo.init()?;
         }
         GitSubCommand::Add(opts) => {
@@ -39,6 +49,9 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
             let root = current_dir.to_str().unwrap();
             let work_tree = Worktree::new(root.to_string());
             work_tree.read_index()?
+        }
+        GitSubCommand::Config(opts) => {
+            println!("config options: {:?}", opts);
         }
     }
     Ok(())

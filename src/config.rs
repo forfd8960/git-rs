@@ -8,7 +8,7 @@ use std::{
 #[derive(Debug)]
 pub struct Config {
     pub core: Core,
-    pub user: User,
+    pub user: Option<User>,
     pub branches: HashMap<String, Branch>,
 }
 
@@ -36,7 +36,7 @@ pub struct Branch {
 }
 
 impl Config {
-    pub fn new(core: Core, user: User, branches: HashMap<String, Branch>) -> Self {
+    pub fn new(core: Core, user: Option<User>, branches: HashMap<String, Branch>) -> Self {
         Config {
             core,
             user,
@@ -52,7 +52,7 @@ impl Config {
         Ok(contents)
     }
 
-    pub fn write(&self, path: &str) -> Result<()> {
+    pub fn init(&self, path: &str) -> Result<()> {
         let mut file = OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -67,7 +67,10 @@ impl Config {
         let mut config = String::new();
 
         config.push_str(&self.core.encode());
-        config.push_str(&self.user.encode());
+        if let Some(u) = &self.user {
+            config.push_str(&u.encode());
+        }
+
         for (_, br) in &self.branches {
             config.push_str(br.encode().as_str());
         }
@@ -97,7 +100,7 @@ impl Core {
 
     pub fn encode(&self) -> String {
         format!(
-            "[core]\nbare = {}\nworktree = {}\ncommentChar = {}\nrepositoryFormatVersion = {}\n",
+            "[core]\n\tbare = {}\n\tworktree = {}\n\tcommentChar = {}\n\trepositoryFormatVersion = {}\n",
             self.is_bare, self.worktree, self.comment_char, self.repository_format_version
         )
     }

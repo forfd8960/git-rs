@@ -32,6 +32,9 @@ pub enum GitSubCommand {
     UpdateIndex(UpdateIndexOpts),
     #[command(name = "read-index")]
     ReadIndex,
+
+    #[command(name = "config", about = "get and set repository or global options")]
+    Config(ConfigOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -157,3 +160,20 @@ pub struct BranchOpts {
 
 #[derive(Debug, Parser)]
 pub struct UpdateIndexOpts {}
+
+#[derive(Debug, Parser)]
+pub struct ConfigOpts {
+    #[arg(short, long)]
+    pub local: bool,
+
+    #[arg(short, long)]
+    pub global: bool,
+
+    #[command(subcommand)]
+    pub list: ConfigSubCommands,
+}
+
+#[derive(Debug, Subcommand, Clone)]
+enum ConfigSubCommands {
+    List,
+}
