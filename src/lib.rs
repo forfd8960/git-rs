@@ -1,4 +1,5 @@
 pub mod command;
+pub mod config;
 pub mod errors;
 pub mod multiwriter;
 pub mod objects;
