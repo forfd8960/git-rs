@@ -134,9 +134,22 @@ impl Branch {
     }
 
     pub fn encode(&self) -> String {
-        format!(
-            "[branch \"{}\"]\nremote = {}\nmerge = {}\nrebase = {}\ndescription = {}",
-            self.name, self.remote, self.merge, self.rebase, self.description
-        )
+        let mut config = String::new();
+        config.push_str(&format!("[branch \"{}\"]\n", self.name));
+
+        if self.remote != "" {
+            config.push_str(&format!("\tremote = {}\n", self.remote));
+        }
+        if self.merge != "" {
+            config.push_str(&format!("\t\nmerge = {}\n", self.merge));
+        }
+        if self.rebase != "" {
+            config.push_str(&format!("\t\nrebase = {}\n", self.rebase));
+        }
+        if self.description != "" {
+            config.push_str(&format!("\t\ndescription = {}\n", self.description));
+        }
+
+        config
     }
 }

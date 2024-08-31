@@ -2,6 +2,7 @@ use std::{collections::HashMap, env};
 
 use crate::{
     config::{Config, Core, User},
+    plumbing::MAIN,
     repo::Repository,
     worktree::Worktree,
 };
@@ -14,14 +15,9 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
     match cmd {
         GitSubCommand::Init(opts) => {
             println!("init repo options: {:?}", opts);
-            let current_dir = env::current_dir().unwrap();
-            let conf = Config::new(
-                Core::new(false, "".to_string(), "#".to_string(), "0".to_string()),
-                None,
-                HashMap::new(),
-            );
 
-            let repo = Repository::new(current_dir.to_str().unwrap(), conf);
+            let current_dir = env::current_dir().unwrap();
+            let repo = Repository::new(current_dir.to_str().unwrap());
             repo.init()?;
         }
         GitSubCommand::Add(opts) => {
