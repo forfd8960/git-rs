@@ -11,50 +11,66 @@ use crate::plumbing::{
     object::{self, ObjectType},
 };
 
+const GIT_DIR: &str = "/.git";
+
 pub struct Worktree {
-    root: String,
+    pub git_dir_path: String,
 }
 
 impl Worktree {
-    pub fn new(root: String) -> Self {
-        Worktree { root }
+    pub fn new(cur_dir: String) -> Self {
+        Worktree {
+            git_dir_path: cur_dir + GIT_DIR,
+        }
     }
 
     pub fn add(&mut self, add_file: &str) -> anyhow::Result<()> {
-        let current_dir = self.root.clone();
+        println!("dot_git: {}", self.git_dir_path);
 
-        let dot_git = current_dir.clone() + "/.git";
-        println!("dot_git: {}", dot_git);
-
-        let index_path = dot_git.clone() + "/index";
-        let mut index = Index::from(&index_path)?;
-        println!("{:?}", index);
-
-        let file_path = current_dir.clone() + "/" + add_file;
+        let file_path = self.git_dir_path.clone() + "/" + add_file;
         println!("file_path: {}", file_path);
 
         let mut file = File::open(&file_path)?;
         let mut content = Vec::new();
         file.read_to_end(&mut content)?;
 
-        let hash_bytes = hash::compute_hash(&ObjectType::BlobObject, content.as_ref());
+        let hash_bytes = self.add_file_to_storage(&content)?;
+        let add_file_metadata = file.metadata()?;
+
+        self.add_file_to_index(&file_path, &hash_bytes, &add_file_metadata)
+    }
+
+    fn add_file_to_storage(&self, content: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let hash_bytes = hash::compute_hash(&ObjectType::BlobObject, content);
         println!("hash: {:?}, len: {}", hash_bytes, hash_bytes.len());
 
-        let obj_blob_path = object::write_blob(content, &hash_bytes)?;
+        let obj_blob_path = object::write_blob(content.to_vec(), &hash_bytes)?;
         println!("successfully write object to: {}", obj_blob_path);
+        Ok(hash_bytes)
+    }
 
-        println!("getting file metadata");
-        let add_file_metadata = file.metadata()?;
-        println!("add_file_metadata: {:?}", add_file_metadata);
+    fn add_file_to_index(
+        &self,
+        file_path: &str,
+        hash_bytes: &[u8],
+        metadata: &fs::Metadata,
+    ) -> anyhow::Result<()> {
+        let index_path = self.git_dir_path.clone() + "/index";
+        let mut index = Index::from(&index_path)?;
+        println!("{:?}", index);
 
-        let blob_name = get_filename(&file_path);
-        if let Some(e) = index.entry(blob_name) {
-            // update entry to index
-        } else {
-            // add entry to index
-            let mut e = Entry::new();
-            self.fill_entry(&mut e, blob_name, &hash_bytes, &add_file_metadata)?;
-            index.add(&e);
+        let blob_name = get_filename(file_path);
+        let entry = index.entry(blob_name);
+
+        match entry {
+            Some(_) => {
+                self.update_entry(&mut index, blob_name.to_string(), hash_bytes, metadata)?;
+            }
+            None => {
+                let mut e = Entry::new();
+                self.fill_entry(&mut e, &blob_name, hash_bytes, metadata)?;
+                index.add(&e);
+            }
         }
 
         // write index to index file
@@ -75,29 +91,49 @@ impl Worktree {
         e: &mut Entry,
         filename: &str,
         hash_bytes: &[u8],
-        metdata: &fs::Metadata,
+        metadata: &fs::Metadata,
     ) -> anyhow::Result<()> {
         e.name = filename.to_string();
         e.hash = hash_bytes.to_vec();
-        e.created_at = metdata.created()?;
-        e.modified_at = metdata.modified()?;
-        e.size = metdata.size() as u32;
-        e.dev = metdata.dev() as u32;
-        e.inode = metdata.ino() as u32;
+        e.created_at = metadata.created()?;
+        e.modified_at = metadata.modified()?;
+        e.size = metadata.size() as u32;
+
+        self.fill_sys_info(e, metadata);
+        Ok(())
+    }
+
+    fn update_entry(
+        &self,
+        idx: &mut Index,
+        name: String,
+        hash_bytes: &[u8],
+        metadata: &fs::Metadata,
+    ) -> anyhow::Result<()> {
+        let mut entry = Entry::new();
+
+        entry.name = name.to_string();
+        entry.hash = hash_bytes.to_vec();
+        entry.modified_at = metadata.modified()?;
+        entry.size = metadata.size() as u32;
+
+        self.fill_sys_info(&mut entry, metadata);
+        idx.update_entry(entry)
+    }
+
+    fn fill_sys_info(&self, e: &mut Entry, metadata: &fs::Metadata) {
+        e.dev = metadata.dev() as u32;
+        e.inode = metadata.ino() as u32;
 
         //todo: set mode from file mode
         e.mode = filemode::REGULAR;
         e.stage = 0;
-        e.gid = metdata.gid() as u32;
-        e.uid = metdata.uid() as u32;
-        Ok(())
+        e.gid = metadata.gid() as u32;
+        e.uid = metadata.uid() as u32;
     }
 
     pub fn read_index(&self) -> anyhow::Result<()> {
-        let current_dir = self.root.clone();
-        let dot_git = current_dir.clone() + "/.git";
-
-        let index_path = dot_git.clone() + "/index";
+        let index_path = self.git_dir_path.clone() + "/index";
         let index = Index::from(&index_path)?;
         println!("{}", index);
         Ok(())

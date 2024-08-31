@@ -19,10 +19,12 @@ const (
 
 use std::{fmt::Display, fs::File, time};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use decoder::Decoder;
 use encoder::Encoder;
+
+use crate::errors::GitError;
 
 const INDEX_SIG: [u8; 4] = [b'D', b'I', b'R', b'C'];
 const INDEX_VERSION_MIN: u32 = 2;
@@ -137,6 +139,22 @@ impl Index {
         self.entries.iter().find(|e| e.name == path)
     }
 
+    pub fn update_entry(&mut self, new_entry: Entry) -> anyhow::Result<()> {
+        let idx = self
+            .entries
+            .iter_mut()
+            .position(|e| e.name == new_entry.name);
+        match idx {
+            Some(idx) => {
+                let old_entry = self.entries.remove(idx);
+                self.entries[idx] = Entry::from_old_new_entry(old_entry, new_entry);
+            }
+            _ => bail!(GitError::EntryNotFound),
+        }
+
+        Ok(())
+    }
+
     pub fn add(&mut self, e: &Entry) {
         self.entries.push(e.clone());
     }
@@ -158,6 +176,24 @@ impl Entry {
             stage: 0,
             skip_worktree: false,
             intent_to_add: false,
+        }
+    }
+
+    pub fn from_old_new_entry(old_entry: Entry, new_entry: Entry) -> Self {
+        Entry {
+            hash: new_entry.hash,
+            name: old_entry.name,
+            created_at: old_entry.created_at,
+            modified_at: new_entry.modified_at,
+            dev: new_entry.dev,
+            inode: new_entry.inode,
+            mode: new_entry.mode,
+            uid: new_entry.uid,
+            gid: new_entry.gid,
+            size: new_entry.size,
+            stage: new_entry.stage,
+            skip_worktree: old_entry.skip_worktree,
+            intent_to_add: old_entry.intent_to_add,
         }
     }
 }
