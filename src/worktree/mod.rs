@@ -1,3 +1,5 @@
+pub mod commit;
+
 use std::{
     fs::{self, File, OpenOptions},
     io::Read,

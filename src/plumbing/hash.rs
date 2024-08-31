@@ -1,6 +1,5 @@
 use super::object::object_type_bytes;
 use super::object::ObjectType;
-use anyhow::Result;
 use sha1_checked::{Digest, Sha1};
 
 // Size defines the amount of bytes the hash yields.
