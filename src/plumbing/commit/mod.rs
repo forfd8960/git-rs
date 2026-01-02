@@ -60,6 +60,17 @@ type ExtraHeader struct {
 }
 */
 
+use crate::plumbing::object::Signature;
+
+type MessageEncoding = String;
+
+#[derive(Debug, Clone)]
+pub struct ExtraHeader {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct Commit {
     // Hash of the commit object.
     pub hash: Vec<u8>,

@@ -11,3 +11,5 @@ pub mod object;
 pub mod reference;
 pub mod store;
 pub mod tree;
+pub mod file;
+pub mod blob;

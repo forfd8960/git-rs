@@ -1,10 +1,10 @@
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{self, Write},
 };
-use chrono::{self, DateTime, FixedOffset};
+use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
 
-use flate2::write::ZlibEncoder;
+use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 use flate2::Compression;
 
 // const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
@@ -18,6 +18,8 @@ pub enum ObjectType {
     TagObject,
 }
 
+// Signature is used to identify who and when created a commit or tag.
+#[derive(Clone, Debug)]
 pub struct Signature {
     pub name: String,
     pub email: String,
@@ -38,7 +40,7 @@ impl Signature {
             let time_str = &b_str[close_bracket + 2..];
             DateTime::parse_from_str(time_str, DATEFORMAT).unwrap()
         } else {
-            chrono::Utc::now().with_timezone(&FixedOffset::east(0))
+            FixedOffset::east_opt(0).unwrap().with_ymd_and_hms(2016, 11, 08, 0, 0, 0).unwrap()
         };
 
         Signature { name, email, when }
@@ -46,6 +48,10 @@ impl Signature {
 
     pub fn encode(&self) -> String {
         format!("{} <{}> {}", self.name, self.email, self.when.format(DATEFORMAT))
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("{} <{}>", self.name, self.email)
     }
 }
 
@@ -179,7 +185,7 @@ pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String>
 
     let hash_str = base16ct::lower::encode_string(hash_bytes);
 
-    let (blob_dir, file_name) = get_blob_path(&hash_str);
+    let (blob_dir, file_name) = get_obj_path(&hash_str);
     println!("[write_blob] blob dir: {}", blob_dir.clone());
     println!("[write_blob] file_name: {}", file_name.clone());
 
@@ -198,7 +204,19 @@ pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String>
     Ok(file_name)
 }
 
-fn get_blob_path(hash_str: &str) -> (String, String) {
+pub fn read_object(hash: &str, obj_path: &str) -> anyhow::Result<Vec<u8>> {
+    let (obj_dir, obj_file) = get_obj_path(hash);
+    let full_path = obj_path.to_owned() + "/" + &obj_dir + "/" + &obj_file;
+    let compressed_data = fs::read(full_path)?;
+
+    let mut d = ZlibDecoder::new(&compressed_data[..]);
+    let mut obj_data = Vec::new();
+    io::copy(&mut d, &mut obj_data)?;
+
+    Ok(obj_data)
+}
+
+fn get_obj_path(hash_str: &str) -> (String, String) {
     let dir = ".git/objects/".to_owned() + &hash_str[0..2];
     (dir.clone(), dir + "/" + &hash_str[2..])
 }

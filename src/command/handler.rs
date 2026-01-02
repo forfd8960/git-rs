@@ -44,7 +44,8 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         GitSubCommand::ReadIndex => {
             let root = current_dir.to_str().unwrap();
             let work_tree = Worktree::new(root.to_string());
-            work_tree.read_index()?
+            let idx = work_tree.read_index()?;
+            println!("{:?}", idx);
         }
         GitSubCommand::Config(opts) => {
             println!("config options: {:?}", opts);
