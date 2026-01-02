@@ -14,6 +14,9 @@ use crate::plumbing::{
 };
 
 const GIT_DIR: &str = "/.git";
+const OBJECTS_DIR: &str = "/objects";
+const HEAD_FILE: &str = "/HEAD";
+const IDX_NAME: &str = "index";
 
 pub struct Worktree {
     pub git_dir_path: String,
@@ -58,7 +61,7 @@ impl Worktree {
         metadata: &fs::Metadata,
     ) -> anyhow::Result<()> {
         let index_path = self.git_dir_path.clone() + "/index";
-        let mut index = Index::from(&index_path)?;
+        let mut index = self.read_index()?;
         println!("{:?}", index);
 
         let blob_name = get_filename(file_path);
@@ -134,11 +137,11 @@ impl Worktree {
         e.uid = metadata.uid() as u32;
     }
 
-    pub fn read_index(&self) -> anyhow::Result<()> {
-        let index_path = self.git_dir_path.clone() + "/index";
+    pub fn read_index(&self) -> anyhow::Result<Index> {
+        let index_path = self.git_dir_path.clone() + "/" + IDX_NAME;
         let index = Index::from(&index_path)?;
         println!("{}", index);
-        Ok(())
+        Ok(index)
     }
 }
 
