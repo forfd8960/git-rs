@@ -1,7 +1,8 @@
 use std::collections::HashMap;
+use std::env;
 
 use super::hash::Hash;
-use crate::plumbing::{hash, index, object};
+use crate::{errors::GitError, plumbing::{filemode, hash, index, object::{self, ObjectType}}};
 
 /*
 // Tree is basically like a directory - it references a bunch of other trees
@@ -53,7 +54,7 @@ pub struct Tree<'a> {
     pub t: HashMap<String, &'a Tree<'a>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeEntry {
     pub name: String,
     pub mode: u32,
@@ -77,6 +78,8 @@ impl Tree<'_> {
         Ok(())
     }
 
+    // decode tree:
+    // [mode + " " + name + "\0" + sha1 (20 bytes)]*
     pub fn decode(&mut self, data: &[u8]) -> anyhow::Result<()> {
         let mut entries: Vec<TreeEntry> = Vec::new();
         let mut i = 0;
@@ -114,10 +117,8 @@ impl Tree<'_> {
     }
 
     // encode tree to byte array
-    pub fn encode(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn encode(&self) -> Vec<u8>{
         let mut encoded: Vec<u8> = Vec::new();
-        // set obj type to tree
-        encoded.extend_from_slice((object::OBJ_TREE_HEADER.to_string() + " ").as_bytes());
 
         // sort tree entries by name
         let mut sorted_entries = self.entries.clone();
@@ -131,20 +132,9 @@ impl Tree<'_> {
             encoded.push(0); // null byte
             encoded.extend_from_slice(&entry.hash.0);
         }
-        Ok(encoded)
+        encoded
     }
 }
-
-// buildTreeHelper converts a given index.Index file into multiple git objects
-// reading the blobs from the given filesystem and creating the trees from the
-// index structure. The created objects are pushed to a given Storer.
-/*type buildTreeHelper struct {
-    fs billy.Filesystem
-    s  storage.Storer
-
-    trees   map[string]*object.Tree
-    entries map[string]*object.TreeEntry
-}*/
 
 pub struct BuildTreeHelper<'a> {
     pub obj_path: String,
@@ -161,69 +151,140 @@ impl BuildTreeHelper<'_> {
         }
     }
 
-    pub fn build_tree(&mut self, idx: &index::Index) -> anyhow::Result<Hash> {
+    pub fn build_tree(&mut self, idx: &index::Index) -> Result<Hash, GitError> {
         const ROOT_NODE: &str = "";
+        let mut root_tree = Tree::new(&self.obj_path);
+
         self.trees
-            .insert(ROOT_NODE.to_string(), Tree::new(&self.obj_path));
+            .insert(ROOT_NODE.to_string(), root_tree.clone());
 
         for e in &idx.entries {
-            self.commit_index_entry(e)?;
+            self.commit_index_entry(e);
         }
 
-        Ok(self.copy_tree_to_storage_recursive(ROOT_NODE, self.trees.get(ROOT_NODE).unwrap())?)
+        Ok(self.copy_tree_to_storage_recursive(ROOT_NODE, &mut root_tree)?)
     }
 
-    fn commit_index_entry(&mut self, e: &index::Entry) -> anyhow::Result<()> {
-        let path_parts: Vec<&str> = e.name.split('/').collect();
-        let mut current_path = String::new();
+    fn commit_index_entry(&mut self, e: &index::Entry) {
+        let parts: Vec<&str> = e.name.split('/').collect();
 
-        for (i, part) in path_parts.iter().enumerate() {
-            if i == path_parts.len() - 1 {
-                // last part - file
-                let hash = Hash::new(e.hash.as_slice().try_into()?);
-                let entry = TreeEntry {
-                    name: part.to_string(),
-                    mode: e.mode,
-                    hash,
-                };
-                self.entries.insert(e.name.clone(), entry);
-            } else {
-                // directory
-                if !current_path.is_empty() {
-                    current_path.push('/');
-                }
-                current_path.push_str(part);
-
-                if !self.trees.contains_key(&current_path) {
-                    self.trees
-                        .insert(current_path.clone(), Tree::new(&self.obj_path));
-                }
+        let mut fullpath = String::new();
+        for part in parts {
+            let parent = fullpath.clone();
+            if !fullpath.is_empty() {
+                fullpath.push('/');
             }
+            fullpath.push_str(part);
+
+            self.do_build_tree(e, &parent, &fullpath);
         }
-        Ok(())
     }
 
-    fn copy_tree_to_storage_recursive(&self, root: &str, tree: &Tree) -> anyhow::Result<_, Hash> {
-        let mut new_tree = Tree::new(&self.obj_path);
-        for entry in &tree.entries {
-            if let Some(t) = self.trees.get(&format!("{}/{}", root, entry.name)) {
-                // it's a tree
+    fn do_build_tree(&mut self, e: &index::Entry, parent: &str, fullpath: &str) {
+        if self.trees.contains_key(fullpath) {
+            return;
+        }
+
+        if self.entries.contains_key(fullpath) {
+            return;
+        }
+
+        let mut te = TreeEntry {
+            name: String::from(fullpath.split('/').last().unwrap()),
+            mode: 0,
+            hash: Hash::default(),
+        };
+
+        if fullpath == e.name {
+            te.mode = e.mode;
+            te.hash = Hash::from(e.hash.clone());
+        } else {
+            te.mode = filemode::DIR;
+            let subtree = Tree::new(&self.obj_path);
+            self.trees.insert(fullpath.to_string(), subtree);
+        }
+
+        if let Some(parent_tree) = self.trees.get_mut(parent) {
+            parent_tree.entries.push(te.clone());
+        }
+    }
+
+    fn copy_tree_to_storage_recursive(&mut self, parent: &str, tree: &mut Tree) -> Result<Hash, GitError>{
+        for idx in 0..tree.entries.len() {
+            // clone the entry to avoid holding an immutable borrow while we mutate the vector
+            let entry = tree.entries[idx].clone();
+            if entry.mode != filemode::DIR && !entry.hash.is_zero() {
+                continue;
+            }
+
+            let entry_path = format!("{}/{}", parent, entry.name);
+
+            // take subtree out of the map so we don't hold a mutable borrow into self
+            let entry_path_key = entry_path.clone();
+
+            if let Some(mut subtree) = self.trees.remove(&entry_path_key) {
+                // it's a tree (owned), recurse without holding a mutable borrow of self.trees
                 let subtree_hash =
-                    self.copy_tree_to_storage_recursive(&format!("{}/{}", root, entry.name), t)?;
+                    self.copy_tree_to_storage_recursive(&entry_path, &mut subtree)?;
+
+                // put subtree back (if you don't need it afterwards you can skip reinserting)
+                self.trees.insert(entry_path_key.clone(), subtree);
                 let new_entry = TreeEntry {
                     name: entry.name.clone(),
                     mode: entry.mode,
                     hash: subtree_hash,
                 };
-                new_tree.entries.push(new_entry);
-            } else if let Some(e) = self.entries.get(&format!("{}/{}", root, entry.name)) {
-                // it's a blob
-                new_tree.entries.push(e.clone());
+
+                tree.entries[idx] = new_entry;
             }
         }
-        let encoded_tree = new_tree.encode()?;
-        let hash_bytes = hash::compute_hash(&object::ObjectType::TreeObject, &encoded_tree);
-        object::write_tree(encoded_tree, &hash_bytes)?;
+
+        let tree_bs = tree.encode();
+        let hash_bytes = hash::compute_hash(&ObjectType::TreeObject, &tree_bs);
+        object::write_tree(tree_bs, &hash_bytes)?;
         Ok(Hash::from(hash_bytes))
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use crate::plumbing::filemode::{DIR, REGULAR};
+    use std::env;
+    use super::*;
+
+    #[test]
+    fn test_tree_encode_decode() -> anyhow::Result<()> {
+        let git_path = env::var("GITTESTPATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        println!("git path: {}", git_path);
+
+        let mut tree = Tree::new(&format!("{}/objects", git_path));
+        let entry1 = TreeEntry {
+            name: "file1.txt".to_string(),
+            mode: REGULAR,
+            hash: Hash::from("e965047ad7c57865823c7d992b1d046ea66edf78"),
+        };
+        let entry2 = TreeEntry {
+            name: "subdir".to_string(),
+            mode: DIR,
+            hash: Hash::from("f0d75db65e3b74f4fdebd93915ea7bcb9d93b407"),
+        };
+        tree.entries.push(entry1);
+        tree.entries.push(entry2);
+
+        let encoded = tree.encode();
+
+        println!("encoded tree bytes: {:?}", String::from_utf8_lossy(&encoded));
+
+        let mut decoded_tree = Tree::new(&format!("{}/objects", git_path));
+        decoded_tree.decode(&encoded)?;
+
+        assert_eq!(tree.entries.len(), decoded_tree.entries.len());
+        for (e1, e2) in tree.entries.iter().zip(decoded_tree.entries.iter()) {
+            assert_eq!(e1.name, e2.name);
+            assert_eq!(e1.mode, e2.mode);
+            assert_eq!(e1.hash.0, e2.hash.0);
+        }
+        Ok(())
     }
 }

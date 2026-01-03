@@ -7,7 +7,7 @@ pub const SIZE: u16 = 20;
 // HexSize defines the strings size of the hash when represented in hexadecimal.
 pub const HEX_SIZE: u16 = 40;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone,PartialEq, Eq)]
 pub struct Hash(pub [u8; SIZE as usize]);
 
 impl Hash {
@@ -17,6 +17,10 @@ impl Hash {
 
     pub fn to_string(&self) -> String {
         base16ct::lower::encode_string(&self.0)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.0.iter().all(|&b| b == 0)
     }
 }
 

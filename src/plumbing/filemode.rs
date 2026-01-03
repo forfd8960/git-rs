@@ -39,7 +39,7 @@ const (
 )
 */
 pub const EMPTY: u32 = 0;
-pub const DIR: u32 = 0040000;
+pub const DIR: u32 = 040000;
 pub const REGULAR: u32 = 100644;
 pub const DEPRECATED: u32 = 100664;
 pub const EXECUTABLE: u32 = 100755;

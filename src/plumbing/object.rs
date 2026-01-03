@@ -7,7 +7,7 @@ use std::{
 use flate2::Compression;
 use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 
-use crate::plumbing::{blob::Blob, hash::Hash};
+use crate::{errors::GitError, plumbing::{blob::Blob, hash::Hash}};
 
 // const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
 const DATEFORMAT: &str = "%a %b %d %H:%M:%S %Y %z";
@@ -120,7 +120,7 @@ pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String>
     Ok(file_name)
 }
 
-pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String> {
+pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
     let hash_str = base16ct::lower::encode_string(hash_bytes);
     let (tree_dir, file_name) = get_obj_path(&hash_str);
     println!("[write_tree] tree dir: {}", tree_dir.clone());
