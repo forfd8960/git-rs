@@ -45,7 +45,7 @@ type TreeEntry struct {
 }
 */
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tree<'a> {
     pub obj_path: String,
     pub entries: Vec<TreeEntry>,
@@ -152,20 +152,22 @@ impl BuildTreeHelper<'_> {
     }
 
     pub fn build_tree(&mut self, idx: &index::Index) -> Result<Hash, GitError> {
-        const ROOT_NODE: &str = "";
-        let mut root_tree = Tree::new(&self.obj_path);
+        self.build_tree_entries(idx);
 
-        self.trees
-            .insert(ROOT_NODE.to_string(), root_tree.clone());
-
-        for e in &idx.entries {
-            self.commit_index_entry(e);
-        }
-
-        Ok(self.copy_tree_to_storage_recursive(ROOT_NODE, &mut root_tree)?)
+        let mut root_tree = self.trees.get("").unwrap().clone();
+        Ok(self.copy_tree_to_storage_recursive("", &mut root_tree)?)
     }
 
-    fn commit_index_entry(&mut self, e: &index::Entry) {
+    pub fn build_tree_entries(&mut self, idx: &index::Index) {
+        self.trees
+            .insert("".to_string(), Tree::new(&self.obj_path));
+
+        for e in &idx.entries {
+            self.build_index_entry(e);
+        }
+    }
+
+    fn build_index_entry(&mut self, e: &index::Entry) {
         let parts: Vec<&str> = e.name.split('/').collect();
 
         let mut fullpath = String::new();
@@ -240,6 +242,8 @@ impl BuildTreeHelper<'_> {
         }
 
         let tree_bs = tree.encode();
+        println!("tree bytes to write: {:?}", String::from_utf8_lossy(&tree_bs));
+
         let hash_bytes = hash::compute_hash(&ObjectType::TreeObject, &tree_bs);
         object::write_tree(tree_bs, &hash_bytes)?;
         Ok(Hash::from(hash_bytes))
@@ -249,13 +253,13 @@ impl BuildTreeHelper<'_> {
 #[cfg(test)]
 
 mod tests {
-    use crate::plumbing::filemode::{DIR, REGULAR};
+    use crate::plumbing::{filemode::{DIR, REGULAR}, index::Index};
     use std::env;
     use super::*;
 
     #[test]
     fn test_tree_encode_decode() -> anyhow::Result<()> {
-        let git_path = env::var("GITTESTPATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
         println!("git path: {}", git_path);
 
         let mut tree = Tree::new(&format!("{}/objects", git_path));
@@ -285,6 +289,63 @@ mod tests {
             assert_eq!(e1.mode, e2.mode);
             assert_eq!(e1.hash.0, e2.hash.0);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_tree_entries() {
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let index_path = format!("{}/index", git_path);
+        let idx = Index::from(&index_path).unwrap();
+        let mut bth = BuildTreeHelper::new(format!("{}/objects", git_path).as_str());
+        bth.build_tree_entries(&idx);
+
+        assert_eq!(bth.trees.len(), 2);
+        
+        let mut expect_tree = Tree::new(format!("{}/objects", git_path).as_str());
+        expect_tree.entries.push(TreeEntry {
+            name: "test1.txt".to_string(),
+            mode: filemode::REGULAR,
+            hash: Hash::from("e965047ad7c57865823c7d992b1d046ea66edf78"),
+        });
+        expect_tree.entries.push(TreeEntry {
+            name: "test1".to_string(),
+            mode: filemode::DIR,
+            hash: Hash::new([0; 20]),
+        });
+        expect_tree.entries.push(TreeEntry {
+            name: "test2.txt".to_string(),
+            mode: filemode::REGULAR,
+            hash: Hash::from("69dc851c723505eb19abd6f22d2a65f42370f74d"),
+        });
+        
+        assert_eq!(bth.trees.get("").unwrap(), &expect_tree);
+
+        let mut expect_tree1 = Tree::new(format!("{}/objects", git_path).as_str());
+        expect_tree1.entries.push(TreeEntry {
+            name: "test1-1.txt".to_string(),
+            mode: filemode::REGULAR,
+            hash: Hash::from("52290d2c5a64e028d9d2411ae0df3e48a82fb5f2"),
+        });
+
+        let test1_tree = bth.trees.get("test1").unwrap();
+        println!("test1 tree: {:?}", test1_tree);
+
+        assert_eq!(test1_tree, &expect_tree1);
+
+    }
+
+    #[test]
+    fn test_build_tree_helper() -> anyhow::Result<()> {
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let index_path = format!("{}/index", git_path);
+        let idx = Index::from(&index_path)?;
+
+        let mut bth = BuildTreeHelper::new(&format!("{}/objects", git_path));
+        let tree_hash = bth.build_tree(&idx)?;
+
+        println!("built tree hash: {:}", tree_hash.to_string());
+
         Ok(())
     }
 }

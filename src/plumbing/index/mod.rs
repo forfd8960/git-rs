@@ -20,7 +20,7 @@ const (
 use std::{fmt::Display, fs::File, time};
 
 use anyhow::{bail, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, format};
 use decoder::Decoder;
 use encoder::Encoder;
 
@@ -123,7 +123,10 @@ impl Index {
     pub fn from(index_path: &str) -> Result<Self> {
         let mut idx = Index::new();
 
-        let index_reader = File::open(index_path)?;
+        let index_reader = File::open(index_path).expect(&format!(
+            "Failed to open index file at path: {}",
+            index_path
+        ));
         let mut index_decoder = Decoder::new(index_reader);
         index_decoder.decode(&mut idx)?;
         Ok(idx)
@@ -158,9 +161,6 @@ impl Index {
     pub fn add(&mut self, e: &Entry) {
         self.entries.push(e.clone());
     }
-
-    // build tree from index entries
-    pub fn build_tree(&mut self) {}
 }
 
 impl Entry {
@@ -239,5 +239,25 @@ impl Display for Index {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use super::*;
+
+    #[test]
+    fn test_build_index_from_path() {
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let index_path = format!("{}/index", git_path);
+        let idx = Index::from(&index_path).unwrap();
+
+        assert_eq!(idx.version, 2);
+        assert_eq!(idx.entries.len(), 3, "index entries length mismatch");
+        assert_eq!(idx.entries[0].name, "test1.txt");
+        assert_eq!(idx.entries[1].name, "test1/test1-1.txt");
+        assert_eq!(idx.entries[2].name, "test2.txt");
     }
 }

@@ -39,9 +39,9 @@ const (
 )
 */
 pub const EMPTY: u32 = 0;
-pub const DIR: u32 = 040000;
-pub const REGULAR: u32 = 100644;
-pub const DEPRECATED: u32 = 100664;
-pub const EXECUTABLE: u32 = 100755;
-pub const SYMLINK: u32 = 120000;
-pub const SUBMODULE: u32 = 160000;
+pub const DIR: u32 = 0o040000;
+pub const REGULAR: u32 = 0o100644;
+pub const DEPRECATED: u32 = 0o100664;
+pub const EXECUTABLE: u32 = 0o100755;
+pub const SYMLINK: u32 = 0o120000;
+pub const SUBMODULE: u32 = 0o160000;

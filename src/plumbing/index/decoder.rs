@@ -71,6 +71,7 @@ impl Decoder {
             println!("reading the {} entry", entry_idx);
 
             self.read_entry(idx)?;
+            println!();
         }
         Ok(())
     }

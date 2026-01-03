@@ -1,7 +1,6 @@
 use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
 use std::{
-    fs::{self, OpenOptions},
-    io::{self, Write},
+    env, fs::{self, OpenOptions}, io::{self, Write}
 };
 
 use flate2::Compression;
@@ -16,6 +15,7 @@ pub const OBJ_BLOB_HEADER: &str = "blob";
 pub const OBJ_TREE_HEADER: &str = "tree";
 pub const OBJ_COMMIT_HEADER: &str = "commit";
 pub const OBJ_TAG_HEADER: &str = "tag";
+pub const OBJECTS_DIR: &str = "objects";
 
 pub enum ObjectType {
     InvalidObject,
@@ -154,6 +154,7 @@ pub fn read_object(hash: &str, obj_path: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 fn get_obj_path(hash_str: &str) -> (String, String) {
-    let dir = ".git/objects/".to_owned() + &hash_str[0..2];
+    let git_path = env::var("GIT_TEST_PATH").unwrap_or(".git".to_string());
+    let dir = format!("{}/{}/{}", git_path, OBJECTS_DIR, &hash_str[..2]);
     (dir.clone(), dir + "/" + &hash_str[2..])
 }
