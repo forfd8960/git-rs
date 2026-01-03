@@ -1,10 +1,9 @@
-
 use crate::plumbing::blob::Blob;
 
 // File represents git file objects.
 pub struct File {
     // Name is the path of the file. It might be relative to a tree,
-	// depending of the function that generates it.
+    // depending of the function that generates it.
     pub name: String,
     // Mode is the file mode.
     pub mode: u32,

@@ -158,6 +158,9 @@ impl Index {
     pub fn add(&mut self, e: &Entry) {
         self.entries.push(e.clone());
     }
+
+    // build tree from index entries
+    pub fn build_tree(&mut self) {}
 }
 
 impl Entry {

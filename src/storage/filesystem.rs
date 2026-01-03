@@ -62,7 +62,7 @@ impl Store for FileSystem {
 
         // create the files
         let head_file = format!("{}/{}", full_path, plumbing::HEAD);
-        
+
         Self::create_and_write_file(
             &head_file,
             &format!("{}{}\n", reference::SYM_REF_PREFIX, plumbing::MAIN),

@@ -1,14 +1,21 @@
+use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
 };
-use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
 
-use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 use flate2::Compression;
+use flate2::{read::ZlibDecoder, write::ZlibEncoder};
+
+use crate::plumbing::{blob::Blob, hash::Hash};
 
 // const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
 const DATEFORMAT: &str = "%a %b %d %H:%M:%S %Y %z";
+
+pub const OBJ_BLOB_HEADER: &str = "blob";
+pub const OBJ_TREE_HEADER: &str = "tree";
+pub const OBJ_COMMIT_HEADER: &str = "commit";
+pub const OBJ_TAG_HEADER: &str = "tag";
 
 pub enum ObjectType {
     InvalidObject,
@@ -40,14 +47,22 @@ impl Signature {
             let time_str = &b_str[close_bracket + 2..];
             DateTime::parse_from_str(time_str, DATEFORMAT).unwrap()
         } else {
-            FixedOffset::east_opt(0).unwrap().with_ymd_and_hms(2016, 11, 08, 0, 0, 0).unwrap()
+            FixedOffset::east_opt(0)
+                .unwrap()
+                .with_ymd_and_hms(2016, 11, 08, 0, 0, 0)
+                .unwrap()
         };
 
         Signature { name, email, when }
     }
 
     pub fn encode(&self) -> String {
-        format!("{} <{}> {}", self.name, self.email, self.when.format(DATEFORMAT))
+        format!(
+            "{} <{}> {}",
+            self.name,
+            self.email,
+            self.when.format(DATEFORMAT)
+        )
     }
 
     pub fn to_string(&self) -> String {
@@ -55,136 +70,37 @@ impl Signature {
     }
 }
 
-/*
-// DateFormat is the format being used in the original git implementation
-const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
-
-// Signature is used to identify who and when created a commit or tag.
-type Signature struct {
-	// Name represents a person name. It is an arbitrary string.
-	Name string
-	// Email is an email, but it cannot be assumed to be well-formed.
-	Email string
-	// When is the timestamp of the signature.
-	When time.Time
-}
-
-// Decode decodes a byte slice into a signature
-func (s *Signature) Decode(b []byte) {
-	open := bytes.LastIndexByte(b, '<')
-	closeBracket := bytes.LastIndexByte(b, '>')
-	if open == -1 || closeBracket == -1 {
-		return
-	}
-
-	if closeBracket < open {
-		return
-	}
-
-	s.Name = string(bytes.Trim(b[:open], " "))
-	s.Email = string(b[open+1 : closeBracket])
-
-	hasTime := closeBracket+2 < len(b)
-	if hasTime {
-		s.decodeTimeAndTimeZone(b[closeBracket+2:])
-	}
-}
-
-// Encode encodes a Signature into a writer.
-func (s *Signature) Encode(w io.Writer) error {
-	if _, err := fmt.Fprintf(w, "%s <%s> ", s.Name, s.Email); err != nil {
-		return err
-	}
-	if err := s.encodeTimeAndTimeZone(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-var timeZoneLength = 5
-
-func (s *Signature) decodeTimeAndTimeZone(b []byte) {
-	space := bytes.IndexByte(b, ' ')
-	if space == -1 {
-		space = len(b)
-	}
-
-	ts, err := strconv.ParseInt(string(b[:space]), 10, 64)
-	if err != nil {
-		return
-	}
-
-	s.When = time.Unix(ts, 0).In(time.UTC)
-	tzStart := space + 1
-	if tzStart >= len(b) || tzStart+timeZoneLength > len(b) {
-		return
-	}
-
-	timezone := string(b[tzStart : tzStart+timeZoneLength])
-	tzhours, err1 := strconv.ParseInt(timezone[0:3], 10, 64)
-	tzmins, err2 := strconv.ParseInt(timezone[3:], 10, 64)
-	if err1 != nil || err2 != nil {
-		return
-	}
-	if tzhours < 0 {
-		tzmins *= -1
-	}
-
-	tz := time.FixedZone("", int(tzhours*60*60+tzmins*60))
-
-	s.When = s.When.In(tz)
-}
-
-func (s *Signature) encodeTimeAndTimeZone(w io.Writer) error {
-	u := max(s.When.Unix(), 0)
-	_, err := fmt.Fprintf(w, "%d %s", u, s.When.Format("-0700"))
-	return err
-}
-
-func (s *Signature) String() string {
-	return fmt.Sprintf("%s <%s>", s.Name, s.Email)
-}
-*/
-
 pub fn get_object_type(object_type: &str) -> ObjectType {
     match object_type {
-        "commit" => ObjectType::CommitObject,
-        "tree" => ObjectType::TreeObject,
-        "blob" => ObjectType::BlobObject,
-        "tag" => ObjectType::TagObject,
+        OBJ_COMMIT_HEADER => ObjectType::CommitObject,
+        OBJ_TREE_HEADER => ObjectType::TreeObject,
+        OBJ_BLOB_HEADER => ObjectType::BlobObject,
+        OBJ_TAG_HEADER => ObjectType::TagObject,
         _ => ObjectType::InvalidObject,
     }
 }
 
 pub fn object_type_bytes(object_type: &ObjectType) -> &'static [u8] {
     match object_type {
-        ObjectType::CommitObject => b"commit",
-        ObjectType::TreeObject => b"tree",
-        ObjectType::BlobObject => b"blob",
-        ObjectType::TagObject => b"tag",
+        ObjectType::CommitObject => OBJ_COMMIT_HEADER.as_bytes(),
+        ObjectType::TreeObject => OBJ_TREE_HEADER.as_bytes(),
+        ObjectType::BlobObject => OBJ_BLOB_HEADER.as_bytes(),
+        ObjectType::TagObject => OBJ_TAG_HEADER.as_bytes(),
         ObjectType::InvalidObject => b"invalid",
     }
 }
 pub fn object_type_string(object_type: &ObjectType) -> &'static str {
     match object_type {
-        ObjectType::CommitObject => "commit",
-        ObjectType::TreeObject => "tree",
-        ObjectType::BlobObject => "blob",
-        ObjectType::TagObject => "tag",
+        ObjectType::CommitObject => OBJ_COMMIT_HEADER,
+        ObjectType::TreeObject => OBJ_TREE_HEADER,
+        ObjectType::BlobObject => OBJ_BLOB_HEADER,
+        ObjectType::TagObject => OBJ_TAG_HEADER,
         ObjectType::InvalidObject => "invalid",
     }
 }
 
 pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String> {
-    let content_bytes = content;
-    let content_len = content_bytes.len();
-    let header = format!("blob {}\0", content_len);
-    let mut blob_bs = header.as_bytes().to_vec();
-
-    blob_bs.extend_from_slice(content_bytes.as_slice());
-
     let hash_str = base16ct::lower::encode_string(hash_bytes);
-
     let (blob_dir, file_name) = get_obj_path(&hash_str);
     println!("[write_blob] blob dir: {}", blob_dir.clone());
     println!("[write_blob] file_name: {}", file_name.clone());
@@ -198,7 +114,28 @@ pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String>
     println!("created file");
 
     let mut e = ZlibEncoder::new(blob, Compression::default());
-    e.write_all(&blob_bs)?;
+    e.write_all(&Blob::encode(content))?;
+    e.finish()?;
+
+    Ok(file_name)
+}
+
+pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String> {
+    let hash_str = base16ct::lower::encode_string(hash_bytes);
+    let (tree_dir, file_name) = get_obj_path(&hash_str);
+    println!("[write_tree] tree dir: {}", tree_dir.clone());
+    println!("[write_tree] file_name: {}", file_name.clone());
+
+    fs::create_dir(tree_dir)?;
+
+    let tree = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(file_name.clone())?;
+    println!("created file");
+
+    let mut e = ZlibEncoder::new(tree, Compression::default());
+    e.write_all(&data)?;
     e.finish()?;
 
     Ok(file_name)

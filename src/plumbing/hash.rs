@@ -30,6 +30,14 @@ impl From<&str> for Hash {
     }
 }
 
+impl From<Vec<u8>> for Hash {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut hash_bytes = [0u8; SIZE as usize];
+        hash_bytes.copy_from_slice(&bytes);
+        Hash(hash_bytes)
+    }
+}
+
 pub fn compute_hash(t: &ObjectType, content: &[u8]) -> Vec<u8> {
     let mut hasher = Sha1::new();
     hasher.update(object_type_bytes(t));

@@ -1,4 +1,7 @@
-use crate::plumbing::{hash, object};
+use crate::plumbing::{
+    hash::{self, Hash},
+    object,
+};
 
 const BLOB_HEADER: &str = "blob";
 
@@ -10,7 +13,7 @@ pub struct Blob {
 }
 
 impl Blob {
-    pub fn new(hash: hash::Hash, size: i64, data: Vec<u8>) -> Self {
+    pub fn new(hash: Hash, size: i64, data: Vec<u8>) -> Self {
         Blob { hash, size, data }
     }
 
@@ -18,7 +21,7 @@ impl Blob {
         let obj_data = object::read_object(hash_str, obj_dir)?;
 
         let mut blob = Blob {
-            hash: hash::Hash::from(hash_str),
+            hash: Hash::from(hash_str),
             size: 0,
             data: Vec::new(),
         };
@@ -58,5 +61,12 @@ impl Blob {
         self.size = size;
         self.data = content.to_vec();
         Ok(())
+    }
+
+    pub fn encode(data: Vec<u8>) -> Vec<u8> {
+        let header = format!("{} {}\0", BLOB_HEADER, data.len());
+        let mut blob_bs = header.as_bytes().to_vec();
+        blob_bs.extend_from_slice(data.as_slice());
+        blob_bs
     }
 }
