@@ -123,6 +123,11 @@ pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String>
 pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
     let hash_str = base16ct::lower::encode_string(hash_bytes);
     let (tree_dir, file_name) = get_obj_path(&hash_str);
+
+    if check_obj_exists(&hash_str) {
+        return Ok(file_name.clone());
+    }
+    
     println!("[write_tree] tree dir: {}", tree_dir.clone());
     println!("[write_tree] file_name: {}", file_name.clone());
 
@@ -132,10 +137,13 @@ pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> 
         .append(true)
         .create(true)
         .open(file_name.clone())?;
-    println!("created file");
+
+    let tree_header = format!("{} {}\0", OBJ_TREE_HEADER, data.len());
+    let mut tree_data = tree_header.as_bytes().to_vec();
+    tree_data.extend_from_slice(&data);
 
     let mut e = ZlibEncoder::new(tree, Compression::default());
-    e.write_all(&data)?;
+    e.write_all(&tree_data)?;
     e.finish()?;
 
     Ok(file_name)
@@ -157,4 +165,9 @@ fn get_obj_path(hash_str: &str) -> (String, String) {
     let git_path = env::var("GIT_TEST_PATH").unwrap_or(".git".to_string());
     let dir = format!("{}/{}/{}", git_path, OBJECTS_DIR, &hash_str[..2]);
     (dir.clone(), dir + "/" + &hash_str[2..])
+}
+
+fn check_obj_exists(hash: &str) -> bool {
+    let (_, obj_file) = get_obj_path(hash);
+    fs::metadata(obj_file).is_ok()
 }

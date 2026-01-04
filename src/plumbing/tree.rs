@@ -212,6 +212,9 @@ impl BuildTreeHelper<'_> {
     }
 
     fn copy_tree_to_storage_recursive(&mut self, parent: &str, tree: &mut Tree) -> Result<Hash, GitError>{
+        // sort tree entries by name
+        tree.entries.sort_by(|a, b| a.name.cmp(&b.name));
+
         for idx in 0..tree.entries.len() {
             // clone the entry to avoid holding an immutable borrow while we mutate the vector
             let entry = tree.entries[idx].clone();
@@ -219,11 +222,15 @@ impl BuildTreeHelper<'_> {
                 continue;
             }
 
-            let entry_path = format!("{}/{}", parent, entry.name);
+
+            let entry_path = if parent.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{}/{}", parent, entry.name)
+            };
 
             // take subtree out of the map so we don't hold a mutable borrow into self
             let entry_path_key = entry_path.clone();
-
             if let Some(mut subtree) = self.trees.remove(&entry_path_key) {
                 // it's a tree (owned), recurse without holding a mutable borrow of self.trees
                 let subtree_hash =
