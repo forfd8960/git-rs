@@ -24,4 +24,10 @@ pub enum GitError {
 
     #[error("invalid commit options: {0}")]
     InvalidCommitOptions(String),
+
+    #[error("invalid commit object: {0}")]
+    InvalidCommitObject(String),
+
+    #[error("invalid signature error: {0}")]
+    InvalidSignature(String),
 }

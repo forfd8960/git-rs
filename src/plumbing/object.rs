@@ -12,8 +12,7 @@ use crate::{
     errors::GitError,
     plumbing::{
         blob::Blob,
-        hash::Hash,
-        reference::{REF_PREFIX, Reference, ReferenceName, SYM_REF_PREFIX},
+        reference::{ ReferenceName, SYM_REF_PREFIX},
     },
 };
 
@@ -35,7 +34,7 @@ pub enum ObjectType {
 }
 
 // Signature is used to identify who and when created a commit or tag.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Signature {
     pub name: String,
     pub email: String,
@@ -43,26 +42,43 @@ pub struct Signature {
 }
 
 impl Signature {
-    pub fn decode(b: &[u8]) -> Self {
-        let b_str = String::from_utf8_lossy(b);
-        let open = b_str.rfind('<').unwrap_or(0);
-        let close_bracket = b_str.rfind('>').unwrap_or(0);
-
-        let name = b_str[..open].trim().to_string();
-        let email = b_str[open + 1..close_bracket].to_string();
-
-        let has_time = close_bracket + 2 < b_str.len();
-        let when = if has_time {
-            let time_str = &b_str[close_bracket + 2..];
-            DateTime::parse_from_str(time_str, DATEFORMAT).unwrap()
-        } else {
-            FixedOffset::east_opt(0)
-                .unwrap()
-                .with_ymd_and_hms(2016, 11, 08, 0, 0, 0)
-                .unwrap()
-        };
-
-        Signature { name, email, when }
+    // decode signature: 
+    // John Doe <john.doe@example.com> 1767268800 +0000
+    pub fn decode(sig_data: &str) -> Result<Self, GitError> {
+        // Find the email part (between < and >)
+        let email_start = sig_data.find('<').ok_or(GitError::InvalidSignature("Missing '<' in signature".to_string()))?;
+        let email_end = sig_data. find('>').ok_or(GitError::InvalidSignature("Missing '>' in signature".to_string()))?;
+        
+        // Extract name (everything before '<', trimmed)
+        let name = sig_data[..email_start].trim().to_string();
+        
+        // Extract email (between < and >)
+        let email = sig_data[email_start + 1..email_end].to_string();
+        
+        // Extract timestamp and timezone (everything after '>')
+        let time_part = sig_data[email_end + 1.. ].trim();
+        let parts: Vec<&str> = time_part.split_whitespace().collect();
+        
+        if parts.len() != 2 {
+            return Err(GitError::InvalidSignature("Invalid timestamp format".to_string()));
+        }
+        
+        // Parse Unix timestamp
+        let timestamp:  i64 = parts[0]
+            .parse()
+            .map_err(|_| GitError::InvalidSignature("Invalid timestamp number".to_string()))?;
+        
+        // Parse timezone offset (e.g., "+0000", "-0500")
+        let tz_str = parts[1];
+        let tz_offset = parse_timezone(tz_str)?;
+        
+        // Create DateTime from timestamp and timezone
+        let when = tz_offset
+            .timestamp_opt(timestamp, 0)
+            .single()
+            .ok_or(GitError::InvalidSignature("Invalid timestamp".to_string()))?;
+        
+        Ok(Signature { name, email, when })
     }
 
     pub fn encode(&self) -> String {
@@ -77,6 +93,30 @@ impl Signature {
     pub fn to_string(&self) -> String {
         format!("{} <{}>", self.name, self.email)
     }
+}
+
+fn parse_timezone(tz:  &str) -> Result<FixedOffset, GitError> {
+    if tz.len() != 5 {
+        return Err(GitError::InvalidSignature("Timezone must be in format +HHMM or -HHMM".to_string()));
+    }
+    
+    let sign = match &tz[0..1] {
+        "+" => 1,
+        "-" => -1,
+        _ => return Err(GitError::InvalidSignature("Timezone must start with + or -".to_string())),
+    };
+    
+    let hours:  i32 = tz[1..3]
+        .parse()
+        .map_err(|_| GitError::InvalidSignature("Invalid timezone hours".to_string()))?;
+    let minutes: i32 = tz[3..5]
+        . parse()
+        .map_err(|_| GitError::InvalidSignature("Invalid timezone minutes".to_string()))?;
+    
+    let total_seconds = sign * (hours * 3600 + minutes * 60);
+    
+    FixedOffset::east_opt(total_seconds)
+        .ok_or_else(|| GitError::InvalidSignature("Invalid timezone offset".to_string()))
 }
 
 pub fn get_object_type(object_type: &str) -> ObjectType {
@@ -245,6 +285,8 @@ fn check_obj_exists(hash: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{DateTime, FixedOffset, TimeZone};
+
     use crate::plumbing::reference::ReferenceName;
 
     #[test]
@@ -282,5 +324,22 @@ mod tests {
             head_hash,
             "56915488f2942031acbef36632381ab5e6c49da2".to_string()
         );
+    }
+
+    #[test]
+    fn test_signature_decode() {
+        use crate::plumbing::object::Signature;
+
+        let sig_str = "John Doe <john.doe@example.com> 1627846261 +0200";
+        let signature = Signature::decode(sig_str).unwrap();
+        assert_eq!(signature.name, "John Doe");
+        assert_eq!(signature.email, "john.doe@example.com");
+
+        let date_time = FixedOffset::east_opt(2 * 3600)
+            .unwrap()
+            .timestamp_opt(1627846261, 0)
+            .single()
+            .unwrap();
+        assert_eq!(signature.when, date_time);
     }
 }
