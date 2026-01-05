@@ -59,10 +59,10 @@ type ExtraHeader struct {
     Value string
 }
 */
-
+use std::fmt::Write;
 use chrono::{DateTime, FixedOffset};
 
-use crate::{objects::tree, plumbing::object::{self, Signature}};
+use crate::{plumbing::object::{self, Signature}};
 
 type MessageEncoding = String;
 
@@ -100,8 +100,8 @@ pub struct Commit {
 
 
 impl Commit {
+    // commit <size>\0<content>
     pub fn encode(&self) -> Vec<u8> {
-
         let mut encoded = Vec::new();
         let tree_hash = base16ct::lower::encode_string(&self.tree_hash);
         let tree_hash = format!(
@@ -117,7 +117,7 @@ impl Commit {
         }
 
         encoded.extend_from_slice(
-            self.encode_author().as_slice(),
+            &self.encode_author(),
         );
         encoded.extend_from_slice(
             &self.encode_committer()
@@ -136,34 +136,54 @@ impl Commit {
     }
 
     pub fn encode_author(&self) -> Vec<u8> {
-        let mut encoded = Vec::new();
-        encoded.extend_from_slice(
-            format!(
-                "author {} <{}> {}\n",
-                self.author.name, self.author.email, String::from_utf8_lossy(&self.encode_when(self.author.when)),
-            )
-            .as_bytes(),
-        );
-        encoded
+        self.author.encode().as_bytes().to_vec()
     }
 
     pub fn encode_committer(&self) -> Vec<u8> {
-        let mut encoded = Vec::new();
-        encoded.extend_from_slice(
-            format!(
-                "committer {} <{}> {}\n",
-                self.committer.name, self.committer.email, String::from_utf8_lossy(&self.encode_when(self.committer.when)),
-            )
-            .as_bytes(),
-        );
-        encoded
+        self.committer.encode().as_bytes().to_vec()
     }
+}
 
-    fn encode_when(&self, when: DateTime<FixedOffset>) -> Vec<u8> {
-        let mut encoded = Vec::new();
-        let unix_time = when.timestamp();
-        let timezone = when.format("%z").to_string();
-        encoded.extend_from_slice(format!("{} {}", unix_time, timezone).as_bytes());
-        encoded
+#[cfg(test)]
+mod tests {
+    use crate::plumbing::hash::Hash;
+
+    use super::*;
+    use chrono::offset::TimeZone;
+
+    #[test]
+    fn test_commit_encode() {
+        let author = Signature {
+            name: "John Doe".to_string(),
+            email: "john.doe@example.com".to_string(),
+            when: FixedOffset::east_opt(0)
+                .unwrap()
+                .with_ymd_and_hms(2026, 1, 1, 12, 0, 0)
+                .unwrap(),
+        };
+        let committer = author.clone();
+        let commit = Commit {
+            hash: vec![],
+            author,
+            committer,
+            merge_tag: "".to_string(),
+            pgp_signature: "".to_string(),
+            message: "Initial commit".to_string(),
+            tree_hash: Hash::from("4b825dc642cb6eb9a060e54bf8d69288fbee4904").0.to_vec(),
+            parent_hashes: vec![],
+            encoding: "UTF-8".to_string(),
+            extra_headers: vec![],
+        };
+        let encoded = commit.encode();
+        println!("committed obj data: {}\n", String::from_utf8_lossy(&encoded));
+
+        let encoded_str = String::from_utf8_lossy(&encoded);
+        let expect_commit =r#"commit 177\0tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+author John Doe <john.doe@example.com> 1767268800 +0000
+committer John Doe <john.doe@example.com> 1767268800 +0000
+
+
+Initial commit"#;
+        assert_eq!(encoded_str, expect_commit);
     }
 }

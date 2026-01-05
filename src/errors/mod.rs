@@ -18,4 +18,10 @@ pub enum GitError {
 
     #[error("entry not found")]
     EntryNotFound,
+
+    #[error("missing author information")]
+    MissingAuthor,
+
+    #[error("invalid commit options: {0}")]
+    InvalidCommitOptions(String),
 }

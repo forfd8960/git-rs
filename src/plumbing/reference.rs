@@ -39,6 +39,10 @@ impl Reference {
         Reference::new_hash_ref(n, Hash::from(t))
     }
 
+    pub fn is_symbolic(&self) -> bool {
+        matches!(self.ref_type, ReferenceType::SymbolicReference)
+    }
+
     pub fn new_symbolic_ref(name: ReferenceName, target: ReferenceName) -> Self {
         Reference {
             ref_type: ReferenceType::SymbolicReference,
@@ -73,6 +77,12 @@ impl ReferenceName {
 
     pub fn new_branch_reference(branch_name: &str) -> Self {
         ReferenceName(format!("{}{}", REF_HEAD_PREFIX, branch_name))
+    }
+}
+
+impl From<&str> for ReferenceName {
+    fn from(s: &str) -> Self {
+        ReferenceName(s.to_string())
     }
 }
 

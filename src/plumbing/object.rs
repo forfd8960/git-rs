@@ -1,12 +1,21 @@
 use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
 use std::{
-    env, fs::{self, OpenOptions}, io::{self, Write}
+    env,
+    fs::{self, OpenOptions},
+    io::{self, Write},
 };
 
 use flate2::Compression;
 use flate2::{read::ZlibDecoder, write::ZlibEncoder};
 
-use crate::{errors::GitError, plumbing::{blob::Blob, hash::Hash}};
+use crate::{
+    errors::GitError,
+    plumbing::{
+        blob::Blob,
+        hash::Hash,
+        reference::{REF_PREFIX, Reference, ReferenceName, SYM_REF_PREFIX},
+    },
+};
 
 // const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
 const DATEFORMAT: &str = "%a %b %d %H:%M:%S %Y %z";
@@ -127,7 +136,7 @@ pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> 
     if check_obj_exists(&hash_str) {
         return Ok(file_name.clone());
     }
-    
+
     println!("[write_tree] tree dir: {}", tree_dir.clone());
     println!("[write_tree] file_name: {}", file_name.clone());
 
@@ -149,6 +158,31 @@ pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> 
     Ok(file_name)
 }
 
+pub fn write_commit(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
+    let hash_str = base16ct::lower::encode_string(hash_bytes);
+    let (commit_dir, file_name) = get_obj_path(&hash_str);
+
+    if check_obj_exists(&hash_str) {
+        return Ok(file_name.clone());
+    }
+
+    println!("[write_commit] commit dir: {}", commit_dir.clone());
+    println!("[write_commit] file_name: {}", file_name.clone());
+
+    fs::create_dir(commit_dir)?;
+
+    let commit = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(file_name.clone())?;
+
+    let mut e = ZlibEncoder::new(commit, Compression::default());
+    e.write_all(&data)?;
+    e.finish()?;
+
+    Ok(file_name)
+}
+
 pub fn read_object(hash: &str, obj_path: &str) -> anyhow::Result<Vec<u8>> {
     let (obj_dir, obj_file) = get_obj_path(hash);
     let full_path = obj_path.to_owned() + "/" + &obj_dir + "/" + &obj_file;
@@ -161,6 +195,43 @@ pub fn read_object(hash: &str, obj_path: &str) -> anyhow::Result<Vec<u8>> {
     Ok(obj_data)
 }
 
+// resolve a reference to its hash string
+pub fn resolve_reference(git_path: &str, ref_name: ReferenceName) -> Result<String, GitError> {
+    if ref_name.0.starts_with(SYM_REF_PREFIX) {
+        let target_ref = ref_name.0.replace(SYM_REF_PREFIX, "");
+        return get_ref(git_path, &target_ref);
+    }
+
+    get_ref(git_path, &ref_name.0)
+}
+
+pub fn head_ref(git_path: &str) -> Result<String, GitError> {
+    let head_path = git_path.to_owned() + "/HEAD";
+    let head_data = fs::read_to_string(head_path)?;
+
+    let head_refs = head_data.trim();
+    resolve_reference(git_path, head_refs.into())
+}
+
+pub fn set_ref(refs_path: &str, ref_name: &str, hash_str: &str) -> anyhow::Result<()> {
+    let full_path = refs_path.to_owned() + "/" + ref_name;
+    let mut ref_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(full_path)?;
+
+    ref_file.write_all(hash_str.as_bytes())?;
+    ref_file.write_all(b"\n")?;
+    Ok(())
+}
+
+pub fn get_ref(git_path: &str, ref_name: &str) -> Result<String, GitError> {
+    let full_path = git_path.to_owned() + "/" + ref_name;
+    let ref_data = fs::read_to_string(full_path)?;
+    Ok(ref_data.trim().to_string())
+}
+
 fn get_obj_path(hash_str: &str) -> (String, String) {
     let git_path = env::var("GIT_TEST_PATH").unwrap_or(".git".to_string());
     let dir = format!("{}/{}/{}", git_path, OBJECTS_DIR, &hash_str[..2]);
@@ -170,4 +241,46 @@ fn get_obj_path(hash_str: &str) -> (String, String) {
 fn check_obj_exists(hash: &str) -> bool {
     let (_, obj_file) = get_obj_path(hash);
     fs::metadata(obj_file).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::plumbing::reference::ReferenceName;
+
+    #[test]
+    fn test_resolve_reference() {
+        use std::env;
+        use crate::plumbing::reference::REF_HEAD_PREFIX;
+        use crate::plumbing::object::resolve_reference;
+
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let head_ref = resolve_reference(&git_path, "HEAD".into()).unwrap();
+        assert_eq!(
+            head_ref,
+            "ref: refs/heads/new-feature".to_string()
+        );
+
+        let master_ref = resolve_reference(
+            &git_path,
+            ReferenceName::from(format!("{}{}", REF_HEAD_PREFIX, "main").as_str()),
+        )
+        .unwrap();
+        assert_eq!(
+            master_ref,
+            "56915488f2942031acbef36632381ab5e6c49da2".to_string()
+        );
+    }
+
+    #[test]
+    fn test_head_ref() {
+        use std::env;
+        use crate::plumbing::object::head_ref;
+
+        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let head_hash = head_ref(&git_path).unwrap();
+        assert_eq!(
+            head_hash,
+            "56915488f2942031acbef36632381ab5e6c49da2".to_string()
+        );
+    }
 }
