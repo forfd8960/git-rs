@@ -36,4 +36,7 @@ pub enum GitError {
 
     #[error("invalid signature error: {0}")]
     InvalidSignature(String),
+
+    #[error("base16ct error: {0:?}")]
+    Base16ctError(base16ct::Error),
 }

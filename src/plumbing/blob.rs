@@ -17,8 +17,8 @@ impl Blob {
         Blob { hash, size, data }
     }
 
-    pub fn from(obj_dir: &str, hash_str: &str) -> anyhow::Result<Self> {
-        let obj_data = object::read_object(hash_str, obj_dir)?;
+    pub fn from(_: &str, hash_str: &str) -> anyhow::Result<Self> {
+        let obj_data = object::read_object(hash_str)?;
 
         let mut blob = Blob {
             hash: Hash::from(hash_str),

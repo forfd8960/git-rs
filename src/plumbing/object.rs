@@ -12,6 +12,7 @@ use crate::{
     errors::GitError,
     plumbing::{
         blob::Blob,
+        commit::Commit,
         reference::{ReferenceName, SYM_REF_PREFIX},
     },
 };
@@ -244,10 +245,20 @@ pub fn write_commit(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError
     Ok(file_name)
 }
 
-pub fn read_object(hash: &str, obj_path: &str) -> anyhow::Result<Vec<u8>> {
-    let (obj_dir, obj_file) = get_obj_path(hash);
-    let full_path = obj_path.to_owned() + "/" + &obj_dir + "/" + &obj_file;
-    let compressed_data = fs::read(full_path)?;
+pub fn read_commit(hash: &str) -> Result<Commit, GitError> {
+    let mut commit = Commit::default();
+    let obj = read_object(hash)?;
+
+    let hash_bs = base16ct::lower::decode_vec(hash).map_err(|e| GitError::Base16ctError(e))?;
+    commit.decode(obj.as_slice(), hash_bs)?;
+
+    Ok(commit)
+}
+
+pub fn read_object(hash: &str) -> Result<Vec<u8>, GitError> {
+    let (_, obj_file) = get_obj_path(hash);
+    // let full_path = obj_path.to_owned() + "/" + &obj_dir + "/" + &obj_file;
+    let compressed_data = fs::read(obj_file)?;
 
     let mut d = ZlibDecoder::new(&compressed_data[..]);
     let mut obj_data = Vec::new();
@@ -308,7 +319,7 @@ fn check_obj_exists(hash: &str) -> bool {
 mod tests {
     use chrono::{FixedOffset, TimeZone};
 
-    use crate::plumbing::reference::ReferenceName;
+    use crate::{errors::GitError, plumbing::reference::ReferenceName};
 
     #[test]
     fn test_resolve_reference() {
@@ -359,5 +370,25 @@ mod tests {
             .single()
             .unwrap();
         assert_eq!(signature.when, date_time);
+    }
+
+    #[test]
+    fn test_read_commit() -> Result<(), GitError> {
+        use crate::plumbing::object::read_commit;
+        let commit_hash = "56915488f2942031acbef36632381ab5e6c49da2";
+        let commit = read_commit(commit_hash)?;
+
+        let tree_bs = base16ct::lower::decode_vec("67689801da7873d968dd796809729bb03f47a573")
+            .map_err(|e| GitError::Base16ctError(e))?;
+        assert_eq!(commit.tree_hash, tree_bs);
+
+        assert_eq!(commit.parent_hashes.len(), 0);
+        assert_eq!(commit.author.name, "forfd8960");
+        assert_eq!(commit.author.email, "forfd8960@gmail.com");
+
+        println!("author when: {}", commit.author.when);
+        assert_eq!(commit.author.when.timestamp(), 1767413624);
+
+        Ok(())
     }
 }

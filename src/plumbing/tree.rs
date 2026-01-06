@@ -79,7 +79,7 @@ impl Tree<'_> {
     }
     // load tree from a given tree object hash from objects storage
     pub fn from(&mut self, hash: &str) -> anyhow::Result<()> {
-        let tree_obj = object::read_object(hash, &self.obj_path)?;
+        let tree_obj = object::read_object(hash)?;
         self.decode(&tree_obj)?;
         Ok(())
     }

@@ -1,11 +1,6 @@
 use anyhow::Result;
 use configparser::ini::Ini;
-use std::{
-    clone,
-    collections::HashMap,
-    fs::{File, OpenOptions},
-    io::{Read, Write},
-};
+use std::{collections::HashMap, fs::OpenOptions, io::Write};
 
 use crate::errors::GitError;
 
