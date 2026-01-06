@@ -60,7 +60,10 @@ type ExtraHeader struct {
 }
 */
 
-use crate::{errors::GitError, plumbing::object::{self, Signature}};
+use crate::{
+    errors::GitError,
+    plumbing::object::{self, Signature},
+};
 
 type MessageEncoding = String;
 
@@ -96,17 +99,12 @@ pub struct Commit {
     pub extra_headers: Vec<ExtraHeader>,
 }
 
-
 impl Commit {
-
     // commit <size>\0<content>
     pub fn encode(&self) -> Vec<u8> {
         let mut encoded = Vec::new();
         let tree_hash = base16ct::lower::encode_string(&self.tree_hash);
-        let tree_hash = format!(
-            "tree {}\n",
-            tree_hash
-        );
+        let tree_hash = format!("tree {}\n", tree_hash);
         encoded.extend_from_slice(tree_hash.as_bytes());
 
         for parent_hash in &self.parent_hashes {
@@ -115,20 +113,12 @@ impl Commit {
             encoded.extend_from_slice(parent_line.as_bytes());
         }
 
-        encoded.extend_from_slice(
-            &self.encode_author(),
-        );
-        encoded.extend_from_slice(
-            &self.encode_committer()
-        );
+        encoded.extend_from_slice(&self.encode_author());
+        encoded.extend_from_slice(&self.encode_committer());
         encoded.extend_from_slice(b"\n\n");
         encoded.extend_from_slice(self.message.as_bytes());
 
-        let obj_header = format!(
-            "{} {}\0",
-            object::OBJ_COMMIT_HEADER,
-            encoded.len()
-        );
+        let obj_header = format!("{} {}\0", object::OBJ_COMMIT_HEADER, encoded.len());
 
         let new_encoded = [&obj_header.as_bytes()[..], &encoded[..]].concat();
         new_encoded
@@ -152,14 +142,18 @@ impl Commit {
             i += 1;
         }
         if i == data.len() {
-            return Err(GitError::InvalidCommitObject("Missing null terminator in header".to_string()));
+            return Err(GitError::InvalidCommitObject(
+                "Missing null terminator in header".to_string(),
+            ));
         }
 
         let header = &data[0..i];
         let header_parts = header.split(|b| *b == b' ').collect::<Vec<&[u8]>>();
         let obj_type = header_parts.get(0);
         if obj_type != Some(&object::OBJ_COMMIT_HEADER.as_bytes()) {
-            return Err(GitError::InvalidCommitObject("Invalid object type".to_string()));
+            return Err(GitError::InvalidCommitObject(
+                "Invalid object type".to_string(),
+            ));
         }
 
         // parse commit body
@@ -185,13 +179,15 @@ impl Commit {
 
             match *key {
                 "tree" => {
-                    let tree_hash = base16ct::lower::decode_vec(value)
-                        .map_err(|_| GitError::InvalidCommitObject("Invalid tree hash".to_string()))?;
+                    let tree_hash = base16ct::lower::decode_vec(value).map_err(|_| {
+                        GitError::InvalidCommitObject("Invalid tree hash".to_string())
+                    })?;
                     self.tree_hash = tree_hash;
                 }
                 "parent" => {
-                    let parent_hash = base16ct::lower::decode_vec(value)
-                        .map_err(|_| GitError::InvalidCommitObject("Invalid parent hash".to_string()))?;
+                    let parent_hash = base16ct::lower::decode_vec(value).map_err(|_| {
+                        GitError::InvalidCommitObject("Invalid parent hash".to_string())
+                    })?;
                     self.parent_hashes.push(parent_hash);
                 }
                 "author" => {
@@ -205,7 +201,7 @@ impl Commit {
                 }
             }
         }
-        
+
         // remaining lines are the commit message
         let message_lines: Vec<&str> = lines.collect();
         self.message = message_lines.join("\n").trim().to_string();
@@ -218,7 +214,7 @@ mod tests {
     use crate::plumbing::hash::Hash;
 
     use super::*;
-    use chrono::{FixedOffset, offset::TimeZone};
+    use chrono::{offset::TimeZone, FixedOffset};
 
     #[test]
     fn test_commit_encode() {
@@ -238,16 +234,21 @@ mod tests {
             merge_tag: "".to_string(),
             pgp_signature: "".to_string(),
             message: "Initial commit".to_string(),
-            tree_hash: Hash::from("4b825dc642cb6eb9a060e54bf8d69288fbee4904").0.to_vec(),
+            tree_hash: Hash::from("4b825dc642cb6eb9a060e54bf8d69288fbee4904")
+                .0
+                .to_vec(),
             parent_hashes: vec![],
             encoding: "UTF-8".to_string(),
             extra_headers: vec![],
         };
         let encoded = commit.encode();
-        println!("committed obj data: {}\n", String::from_utf8_lossy(&encoded));
+        println!(
+            "committed obj data: {}\n",
+            String::from_utf8_lossy(&encoded)
+        );
 
         let encoded_str = String::from_utf8_lossy(&encoded);
-        let expect_commit =r#"commit 177\0tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+        let expect_commit = r#"commit 177\0tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
 author John Doe <john.doe@example.com> 1767268800 +0000
 committer John Doe <john.doe@example.com> 1767268800 +0000
 
@@ -256,24 +257,28 @@ Initial commit"#;
         assert_eq!(encoded_str, expect_commit);
     }
 
-
     #[test]
     fn test_commit_decode() {
         let header = "commit 177\0";
         let mut commit_data = header.as_bytes().to_vec();
-        let body =r#"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+        let body = r#"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
 author John Doe <john.doe@example.com> 1767268800 +0000
 committer John Doe <john.doe@example.com> 1767268800 +0000
 
 
-Initial commit"#.as_bytes();
+Initial commit"#
+            .as_bytes();
         commit_data.extend_from_slice(body);
 
         let mut commit = Commit::default();
 
         let hash = base16ct::lower::decode_vec("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391").unwrap();
         let decode_res = commit.decode(commit_data.as_slice(), hash);
-        assert!(decode_res.is_ok(), "Failed to decode commit: {:?}", decode_res.err());
+        assert!(
+            decode_res.is_ok(),
+            "Failed to decode commit: {:?}",
+            decode_res.err()
+        );
 
         let date_time = FixedOffset::east_opt(0)
             .unwrap()
@@ -281,7 +286,10 @@ Initial commit"#.as_bytes();
             .single()
             .unwrap();
 
-        assert_eq!(base16ct::lower::encode_string(&commit.tree_hash), "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+        assert_eq!(
+            base16ct::lower::encode_string(&commit.tree_hash),
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        );
         assert_eq!(commit.author.name, "John Doe");
         assert_eq!(commit.author.email, "john.doe@example.com");
 
@@ -295,4 +303,3 @@ Initial commit"#.as_bytes();
         assert_eq!(commit.message, "Initial commit");
     }
 }
-        

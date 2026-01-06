@@ -22,6 +22,12 @@ pub enum GitError {
     #[error("missing author information")]
     MissingAuthor,
 
+    #[error("missing user information")]
+    MissingUser,
+
+    #[error("load config failed: {0}")]
+    LoadConfigFailed(String),
+
     #[error("invalid commit options: {0}")]
     InvalidCommitOptions(String),
 

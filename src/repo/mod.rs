@@ -27,11 +27,7 @@ impl Repository {
             },
         )]);
 
-        let conf = Config::new(
-            Core::new(false, "".to_string(), "#".to_string(), "0".to_string()),
-            None,
-            branches,
-        );
+        let conf = Config::default();
 
         Repository {
             config: conf,

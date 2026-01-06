@@ -20,7 +20,7 @@ const (
 use std::{fmt::Display, fs::File, time};
 
 use anyhow::{bail, Result};
-use chrono::{DateTime, Utc, format};
+use chrono::{format, DateTime, Utc};
 use decoder::Decoder;
 use encoder::Encoder;
 

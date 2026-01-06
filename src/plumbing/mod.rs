@@ -7,7 +7,7 @@ pub mod blob;
 pub mod commit;
 pub mod file;
 pub mod filemode;
-pub mod hash;                                                                                  
+pub mod hash;
 pub mod index;
 pub mod object;
 pub mod reference;

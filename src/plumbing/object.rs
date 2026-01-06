@@ -1,4 +1,4 @@
-use chrono::{self, DateTime, FixedOffset, TimeZone, Utc};
+use chrono::{self, DateTime, FixedOffset, Offset, TimeZone};
 use std::{
     env,
     fs::{self, OpenOptions},
@@ -12,7 +12,7 @@ use crate::{
     errors::GitError,
     plumbing::{
         blob::Blob,
-        reference::{ ReferenceName, SYM_REF_PREFIX},
+        reference::{ReferenceName, SYM_REF_PREFIX},
     },
 };
 
@@ -42,42 +42,57 @@ pub struct Signature {
 }
 
 impl Signature {
-    // decode signature: 
+    pub fn new(name: String, email: String) -> Self {
+        let local_offset = chrono::Local::now().offset().fix();
+        let now = chrono::Local::now().with_timezone(&local_offset);
+        Signature {
+            name,
+            email,
+            when: now,
+        }
+    }
+    // decode signature:
     // John Doe <john.doe@example.com> 1767268800 +0000
     pub fn decode(sig_data: &str) -> Result<Self, GitError> {
         // Find the email part (between < and >)
-        let email_start = sig_data.find('<').ok_or(GitError::InvalidSignature("Missing '<' in signature".to_string()))?;
-        let email_end = sig_data. find('>').ok_or(GitError::InvalidSignature("Missing '>' in signature".to_string()))?;
-        
+        let email_start = sig_data.find('<').ok_or(GitError::InvalidSignature(
+            "Missing '<' in signature".to_string(),
+        ))?;
+        let email_end = sig_data.find('>').ok_or(GitError::InvalidSignature(
+            "Missing '>' in signature".to_string(),
+        ))?;
+
         // Extract name (everything before '<', trimmed)
         let name = sig_data[..email_start].trim().to_string();
-        
+
         // Extract email (between < and >)
         let email = sig_data[email_start + 1..email_end].to_string();
-        
+
         // Extract timestamp and timezone (everything after '>')
-        let time_part = sig_data[email_end + 1.. ].trim();
+        let time_part = sig_data[email_end + 1..].trim();
         let parts: Vec<&str> = time_part.split_whitespace().collect();
-        
+
         if parts.len() != 2 {
-            return Err(GitError::InvalidSignature("Invalid timestamp format".to_string()));
+            return Err(GitError::InvalidSignature(
+                "Invalid timestamp format".to_string(),
+            ));
         }
-        
+
         // Parse Unix timestamp
-        let timestamp:  i64 = parts[0]
+        let timestamp: i64 = parts[0]
             .parse()
             .map_err(|_| GitError::InvalidSignature("Invalid timestamp number".to_string()))?;
-        
+
         // Parse timezone offset (e.g., "+0000", "-0500")
         let tz_str = parts[1];
         let tz_offset = parse_timezone(tz_str)?;
-        
+
         // Create DateTime from timestamp and timezone
         let when = tz_offset
             .timestamp_opt(timestamp, 0)
             .single()
             .ok_or(GitError::InvalidSignature("Invalid timestamp".to_string()))?;
-        
+
         Ok(Signature { name, email, when })
     }
 
@@ -95,26 +110,32 @@ impl Signature {
     }
 }
 
-fn parse_timezone(tz:  &str) -> Result<FixedOffset, GitError> {
+fn parse_timezone(tz: &str) -> Result<FixedOffset, GitError> {
     if tz.len() != 5 {
-        return Err(GitError::InvalidSignature("Timezone must be in format +HHMM or -HHMM".to_string()));
+        return Err(GitError::InvalidSignature(
+            "Timezone must be in format +HHMM or -HHMM".to_string(),
+        ));
     }
-    
+
     let sign = match &tz[0..1] {
         "+" => 1,
         "-" => -1,
-        _ => return Err(GitError::InvalidSignature("Timezone must start with + or -".to_string())),
+        _ => {
+            return Err(GitError::InvalidSignature(
+                "Timezone must start with + or -".to_string(),
+            ))
+        }
     };
-    
-    let hours:  i32 = tz[1..3]
+
+    let hours: i32 = tz[1..3]
         .parse()
         .map_err(|_| GitError::InvalidSignature("Invalid timezone hours".to_string()))?;
     let minutes: i32 = tz[3..5]
-        . parse()
+        .parse()
         .map_err(|_| GitError::InvalidSignature("Invalid timezone minutes".to_string()))?;
-    
+
     let total_seconds = sign * (hours * 3600 + minutes * 60);
-    
+
     FixedOffset::east_opt(total_seconds)
         .ok_or_else(|| GitError::InvalidSignature("Invalid timezone offset".to_string()))
 }
@@ -285,22 +306,19 @@ fn check_obj_exists(hash: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, FixedOffset, TimeZone};
+    use chrono::{FixedOffset, TimeZone};
 
     use crate::plumbing::reference::ReferenceName;
 
     #[test]
     fn test_resolve_reference() {
-        use std::env;
-        use crate::plumbing::reference::REF_HEAD_PREFIX;
         use crate::plumbing::object::resolve_reference;
+        use crate::plumbing::reference::REF_HEAD_PREFIX;
+        use std::env;
 
         let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
         let head_ref = resolve_reference(&git_path, "HEAD".into()).unwrap();
-        assert_eq!(
-            head_ref,
-            "ref: refs/heads/new-feature".to_string()
-        );
+        assert_eq!(head_ref, "ref: refs/heads/new-feature".to_string());
 
         let master_ref = resolve_reference(
             &git_path,
@@ -315,8 +333,8 @@ mod tests {
 
     #[test]
     fn test_head_ref() {
-        use std::env;
         use crate::plumbing::object::head_ref;
+        use std::env;
 
         let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
         let head_hash = head_ref(&git_path).unwrap();

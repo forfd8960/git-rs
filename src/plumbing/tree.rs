@@ -2,7 +2,13 @@ use std::collections::HashMap;
 use std::env;
 
 use super::hash::Hash;
-use crate::{errors::GitError, plumbing::{filemode, hash, index, object::{self, ObjectType}}};
+use crate::{
+    errors::GitError,
+    plumbing::{
+        filemode, hash, index,
+        object::{self, ObjectType},
+    },
+};
 
 /*
 // Tree is basically like a directory - it references a bunch of other trees
@@ -117,7 +123,7 @@ impl Tree<'_> {
     }
 
     // encode tree to byte array
-    pub fn encode(&self) -> Vec<u8>{
+    pub fn encode(&self) -> Vec<u8> {
         let mut encoded: Vec<u8> = Vec::new();
 
         // sort tree entries by name
@@ -159,8 +165,7 @@ impl BuildTreeHelper<'_> {
     }
 
     pub fn build_tree_entries(&mut self, idx: &index::Index) {
-        self.trees
-            .insert("".to_string(), Tree::new(&self.obj_path));
+        self.trees.insert("".to_string(), Tree::new(&self.obj_path));
 
         for e in &idx.entries {
             self.build_index_entry(e);
@@ -211,7 +216,11 @@ impl BuildTreeHelper<'_> {
         }
     }
 
-    fn copy_tree_to_storage_recursive(&mut self, parent: &str, tree: &mut Tree) -> Result<Hash, GitError>{
+    fn copy_tree_to_storage_recursive(
+        &mut self,
+        parent: &str,
+        tree: &mut Tree,
+    ) -> Result<Hash, GitError> {
         // sort tree entries by name
         tree.entries.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -221,7 +230,6 @@ impl BuildTreeHelper<'_> {
             if entry.mode != filemode::DIR && !entry.hash.is_zero() {
                 continue;
             }
-
 
             let entry_path = if parent.is_empty() {
                 entry.name.clone()
@@ -249,7 +257,10 @@ impl BuildTreeHelper<'_> {
         }
 
         let tree_bs = tree.encode();
-        println!("tree bytes to write: {:?}", String::from_utf8_lossy(&tree_bs));
+        println!(
+            "tree bytes to write: {:?}",
+            String::from_utf8_lossy(&tree_bs)
+        );
 
         let hash_bytes = hash::compute_hash(&ObjectType::TreeObject, &tree_bs);
         object::write_tree(tree_bs, &hash_bytes)?;
@@ -260,9 +271,12 @@ impl BuildTreeHelper<'_> {
 #[cfg(test)]
 
 mod tests {
-    use crate::plumbing::{filemode::{DIR, REGULAR}, index::Index};
-    use std::env;
     use super::*;
+    use crate::plumbing::{
+        filemode::{DIR, REGULAR},
+        index::Index,
+    };
+    use std::env;
 
     #[test]
     fn test_tree_encode_decode() -> anyhow::Result<()> {
@@ -285,7 +299,10 @@ mod tests {
 
         let encoded = tree.encode();
 
-        println!("encoded tree bytes: {:?}", String::from_utf8_lossy(&encoded));
+        println!(
+            "encoded tree bytes: {:?}",
+            String::from_utf8_lossy(&encoded)
+        );
 
         let mut decoded_tree = Tree::new(&format!("{}/objects", git_path));
         decoded_tree.decode(&encoded)?;
@@ -308,7 +325,7 @@ mod tests {
         bth.build_tree_entries(&idx);
 
         assert_eq!(bth.trees.len(), 2);
-        
+
         let mut expect_tree = Tree::new(format!("{}/objects", git_path).as_str());
         expect_tree.entries.push(TreeEntry {
             name: "test1.txt".to_string(),
@@ -325,7 +342,7 @@ mod tests {
             mode: filemode::REGULAR,
             hash: Hash::from("69dc851c723505eb19abd6f22d2a65f42370f74d"),
         });
-        
+
         assert_eq!(bth.trees.get("").unwrap(), &expect_tree);
 
         let mut expect_tree1 = Tree::new(format!("{}/objects", git_path).as_str());
@@ -339,7 +356,6 @@ mod tests {
         println!("test1 tree: {:?}", test1_tree);
 
         assert_eq!(test1_tree, &expect_tree1);
-
     }
 
     #[test]
