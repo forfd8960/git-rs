@@ -1,4 +1,5 @@
-use std::io;
+use core::error;
+use std::{io, path::StripPrefixError, time::SystemTimeError};
 
 use thiserror::Error;
 
@@ -39,4 +40,10 @@ pub enum GitError {
 
     #[error("base16ct error: {0:?}")]
     Base16ctError(base16ct::Error),
+
+    #[error("system time error: {0}")]
+    SystemTimeError(#[from] SystemTimeError),
+
+    #[error("blob path error: {0}")]
+    BlobPathError(#[from] StripPrefixError),
 }

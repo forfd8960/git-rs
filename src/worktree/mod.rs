@@ -1,4 +1,5 @@
 pub mod commit;
+pub mod status;
 
 use std::{
     fs::{self, File, OpenOptions},

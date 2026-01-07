@@ -1,6 +1,14 @@
 use crate::{
-    config::{self, Config}, errors::GitError, objects::commit::Commit, plumbing::{hash::Hash, object::Signature}, worktree::Worktree
+    config::Config,
+    errors::GitError,
+    plumbing::{hash::Hash, object::Signature},
+    worktree::Worktree,
 };
+
+pub trait Committer {
+    // msg string, opts *CommitOptions
+    fn commit(&self, msg: &str, opts: CommitOptions) -> Result<Hash, GitError>;
+}
 
 /*
 // CommitOptions describes how a commit operation should be performed.
@@ -100,12 +108,11 @@ impl CommitOptions {
         }
 
         if self.author.is_none() {
-            return Err(GitError::MissingAuthor);
+            self.load_config_author_and_committer()?;
         }
         if self.committer.is_none() {
             self.committer = self.author.clone();
         }
-
 
         Ok(())
     }
@@ -122,10 +129,7 @@ impl CommitOptions {
     }
 }
 
-pub trait Committer {
-    // msg string, opts *CommitOptions
-    fn commit(&self, msg: &str, opts: CommitOptions) -> Result<Hash, GitError>;
-}
+
 
 impl Committer for Worktree {
     fn commit(&self, msg: &str, opts: CommitOptions) -> Result<Hash, GitError> {

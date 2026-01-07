@@ -42,4 +42,10 @@ impl Repository {
             .init(&format!("{}/{}/config", self.wt_path, GIT_DIR))?;
         Ok(())
     }
+
+    pub fn head(&self) -> anyhow::Result<String> {
+        let head_path = format!("{}/{}/HEAD", self.wt_path, GIT_DIR);
+        let head_content = std::fs::read_to_string(head_path)?;
+        Ok(head_content.trim().to_string())
+    }
 }

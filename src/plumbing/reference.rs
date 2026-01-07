@@ -1,7 +1,4 @@
-use crate::storage::filesys::reference::ReferenceStore;
-use anyhow::Result;
 use std::fmt::Display;
-
 use super::hash::Hash;
 
 pub const REF_PREFIX: &'static str = "refs/";
@@ -92,6 +89,3 @@ impl Display for ReferenceName {
     }
 }
 
-pub fn resolve_reference(s: &ReferenceStore, ref_name: &ReferenceName) -> Result<Reference> {
-    todo!()
-}
