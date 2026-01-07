@@ -100,7 +100,27 @@ pub struct Commit {
 }
 
 impl Commit {
-    // commit <size>\0<content>
+    pub fn new(msg: &str, tree_hash: Vec<u8>, parent_hashes: Vec<Vec<u8>>, author: Signature, committer: Signature) -> Self {
+        Commit {
+            hash: vec![],
+            author,
+            committer,
+            merge_tag: "".to_string(),
+            pgp_signature: "".to_string(),
+            message: msg.to_string(),
+            tree_hash,
+            parent_hashes,
+            encoding: "UTF-8".to_string(),
+            extra_headers: vec![],
+        }
+    }
+
+    // tree <tree_hash>
+    // parent <parent_hash> (can be multiple)
+    // author <author_name> <author_email> <timestamp> <timezone>
+    // committer <committer_name> <committer_email> <timestamp> <timezone>
+    // <empty line>
+    // <commit_message>
     pub fn encode(&self) -> Vec<u8> {
         let mut encoded = Vec::new();
         let tree_hash = base16ct::lower::encode_string(&self.tree_hash);
@@ -113,15 +133,14 @@ impl Commit {
             encoded.extend_from_slice(parent_line.as_bytes());
         }
 
+        encoded.extend_from_slice(b"author ");
         encoded.extend_from_slice(&self.encode_author());
+        encoded.extend_from_slice(b"\ncommitter ");
         encoded.extend_from_slice(&self.encode_committer());
         encoded.extend_from_slice(b"\n\n");
         encoded.extend_from_slice(self.message.as_bytes());
 
-        let obj_header = format!("{} {}\0", object::OBJ_COMMIT_HEADER, encoded.len());
-
-        let new_encoded = [&obj_header.as_bytes()[..], &encoded[..]].concat();
-        new_encoded
+        encoded
     }
 
     pub fn encode_author(&self) -> Vec<u8> {
@@ -242,19 +261,18 @@ mod tests {
             extra_headers: vec![],
         };
         let encoded = commit.encode();
+
         println!(
             "committed obj data: {}\n",
             String::from_utf8_lossy(&encoded)
         );
 
-        let encoded_str = String::from_utf8_lossy(&encoded);
-        let expect_commit = r#"commit 177\0tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+        let expect_commit = r#"tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904
 author John Doe <john.doe@example.com> 1767268800 +0000
 committer John Doe <john.doe@example.com> 1767268800 +0000
 
-
 Initial commit"#;
-        assert_eq!(encoded_str, expect_commit);
+        assert_eq!(String::from_utf8_lossy(&encoded), expect_commit);
     }
 
     #[test]

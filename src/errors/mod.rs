@@ -35,6 +35,9 @@ pub enum GitError {
     #[error("invalid commit object: {0}")]
     InvalidCommitObject(String),
 
+    #[error("empty commit error")]
+    EmptyCommit,
+
     #[error("invalid signature error: {0}")]
     InvalidSignature(String),
 

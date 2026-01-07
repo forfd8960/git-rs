@@ -4,7 +4,7 @@ use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
     os::unix::fs::MetadataExt,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use flate2::Compression;
@@ -24,6 +24,7 @@ use crate::{
 // const DateFormat = "Mon Jan 02 15:04:05 2006 -0700"
 const DATEFORMAT: &str = "%a %b %d %H:%M:%S %Y %z";
 
+pub const GIT_DIR: &str = ".git";
 pub const OBJ_BLOB_HEADER: &str = "blob";
 pub const OBJ_TREE_HEADER: &str = "tree";
 pub const OBJ_COMMIT_HEADER: &str = "commit";
@@ -101,17 +102,140 @@ impl Signature {
         Ok(Signature { name, email, when })
     }
 
+    // encode to: John Doe <john.doe@example.com> 1767268800 +0000
     pub fn encode(&self) -> String {
         format!(
             "{} <{}> {}",
             self.name,
             self.email,
-            self.when.format(DATEFORMAT)
+            self.when.format("%s %z")
         )
     }
 
     pub fn to_string(&self) -> String {
         format!("{} <{}>", self.name, self.email)
+    }
+}
+
+#[derive(Debug, Clone,PartialEq, Eq)]
+pub struct ObjectStore {
+    pub root: PathBuf,
+    pub git_path: PathBuf,
+}
+
+impl ObjectStore {
+    pub fn new(root: PathBuf) -> Self {
+        ObjectStore {
+            root: root.clone(),
+            git_path: root.join(GIT_DIR),
+        }
+    }
+
+    pub fn get_obj_path(&self, hash_str: &str) -> (String, String) {
+        let git_path = self.git_path.to_str().unwrap();
+        let dir = format!("{}/{}/{}", git_path, OBJECTS_DIR, &hash_str[..2]);
+        (dir.clone(), dir + "/" + &hash_str[2..])
+    }
+
+    pub fn write_blob(&self, content: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
+        let hash_str = base16ct::lower::encode_string(hash_bytes);
+        let (blob_dir, file_name) = self.get_obj_path(&hash_str);
+        println!("[write_blob] blob dir: {}", blob_dir.clone());
+        println!("[write_blob] file_name: {}", file_name.clone());
+
+        fs::create_dir(blob_dir)?;
+
+        let blob = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(file_name.clone())?;
+        println!("created file");
+
+        let mut e = ZlibEncoder::new(blob, Compression::default());
+        e.write_all(&Blob::encode(content))?;
+        e.finish()?;
+
+        Ok(file_name)
+    }
+
+    pub fn read_commit(&self, hash: &str) -> Result<Commit, GitError> {
+        let mut commit = Commit::default();
+        let obj = self.read_object(hash)?;
+
+        let hash_bs = base16ct::lower::decode_vec(hash).map_err(|e| GitError::Base16ctError(e))?;
+        commit.decode(obj.as_slice(), hash_bs)?;
+
+        Ok(commit)
+    }
+
+    pub fn write_commit(&self, data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
+        let hash_str = base16ct::lower::encode_string(hash_bytes);
+        let (commit_dir, file_name) = self.get_obj_path(&hash_str);
+
+        if self.check_obj_exists(&hash_str) {
+            return Ok(file_name.clone());
+        }
+
+        println!("[write_commit] commit dir: {}", commit_dir.clone());
+        println!("[write_commit] file_name: {}", file_name.clone());
+
+        fs::create_dir(commit_dir)?;
+
+        let commit = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(file_name.clone())?;
+
+        let mut e = ZlibEncoder::new(commit, Compression::default());
+        e.write_all(&data)?;
+        e.finish()?;
+
+        Ok(file_name)
+    }
+
+    pub fn write_tree(&self, data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
+        let hash_str = base16ct::lower::encode_string(hash_bytes);
+        let (tree_dir, file_name) = self.get_obj_path(&hash_str);
+
+        if self.check_obj_exists(&hash_str) {
+            return Ok(file_name.clone());
+        }
+
+        println!("[write_tree] tree dir: {}", tree_dir.clone());
+        println!("[write_tree] file_name: {}", file_name.clone());
+
+        fs::create_dir(tree_dir)?;
+
+        let tree = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(file_name.clone())?;
+
+        let tree_header = format!("{} {}\0", OBJ_TREE_HEADER, data.len());
+        let mut tree_data = tree_header.as_bytes().to_vec();
+        tree_data.extend_from_slice(&data);
+
+        let mut e = ZlibEncoder::new(tree, Compression::default());
+        e.write_all(&tree_data)?;
+        e.finish()?;
+
+        Ok(file_name)
+    }
+
+    pub fn read_object(&self, hash: &str) -> Result<Vec<u8>, GitError> {
+        let (_, obj_file) = self.get_obj_path(hash);
+        let compressed_data = fs::read(obj_file)?;
+
+        let mut d = ZlibDecoder::new(&compressed_data[..]);
+        let mut obj_data = Vec::new();
+        io::copy(&mut d, &mut obj_data)?;
+
+        Ok(obj_data)
+    }
+
+    fn check_obj_exists(&self, hash: &str) -> bool {
+        let (_, obj_file) = self.get_obj_path(hash);
+        fs::metadata(obj_file).is_ok()
     }
 }
 
@@ -190,103 +314,6 @@ pub fn object_type_string(object_type: &ObjectType) -> &'static str {
     }
 }
 
-pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
-    let hash_str = base16ct::lower::encode_string(hash_bytes);
-    let (blob_dir, file_name) = get_obj_path(&hash_str);
-    println!("[write_blob] blob dir: {}", blob_dir.clone());
-    println!("[write_blob] file_name: {}", file_name.clone());
-
-    fs::create_dir(blob_dir)?;
-
-    let blob = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(file_name.clone())?;
-    println!("created file");
-
-    let mut e = ZlibEncoder::new(blob, Compression::default());
-    e.write_all(&Blob::encode(content))?;
-    e.finish()?;
-
-    Ok(file_name)
-}
-
-pub fn write_tree(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
-    let hash_str = base16ct::lower::encode_string(hash_bytes);
-    let (tree_dir, file_name) = get_obj_path(&hash_str);
-
-    if check_obj_exists(&hash_str) {
-        return Ok(file_name.clone());
-    }
-
-    println!("[write_tree] tree dir: {}", tree_dir.clone());
-    println!("[write_tree] file_name: {}", file_name.clone());
-
-    fs::create_dir(tree_dir)?;
-
-    let tree = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(file_name.clone())?;
-
-    let tree_header = format!("{} {}\0", OBJ_TREE_HEADER, data.len());
-    let mut tree_data = tree_header.as_bytes().to_vec();
-    tree_data.extend_from_slice(&data);
-
-    let mut e = ZlibEncoder::new(tree, Compression::default());
-    e.write_all(&tree_data)?;
-    e.finish()?;
-
-    Ok(file_name)
-}
-
-pub fn write_commit(data: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
-    let hash_str = base16ct::lower::encode_string(hash_bytes);
-    let (commit_dir, file_name) = get_obj_path(&hash_str);
-
-    if check_obj_exists(&hash_str) {
-        return Ok(file_name.clone());
-    }
-
-    println!("[write_commit] commit dir: {}", commit_dir.clone());
-    println!("[write_commit] file_name: {}", file_name.clone());
-
-    fs::create_dir(commit_dir)?;
-
-    let commit = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(file_name.clone())?;
-
-    let mut e = ZlibEncoder::new(commit, Compression::default());
-    e.write_all(&data)?;
-    e.finish()?;
-
-    Ok(file_name)
-}
-
-pub fn read_commit(hash: &str) -> Result<Commit, GitError> {
-    let mut commit = Commit::default();
-    let obj = read_object(hash)?;
-
-    let hash_bs = base16ct::lower::decode_vec(hash).map_err(|e| GitError::Base16ctError(e))?;
-    commit.decode(obj.as_slice(), hash_bs)?;
-
-    Ok(commit)
-}
-
-pub fn read_object(hash: &str) -> Result<Vec<u8>, GitError> {
-    let (_, obj_file) = get_obj_path(hash);
-    // let full_path = obj_path.to_owned() + "/" + &obj_dir + "/" + &obj_file;
-    let compressed_data = fs::read(obj_file)?;
-
-    let mut d = ZlibDecoder::new(&compressed_data[..]);
-    let mut obj_data = Vec::new();
-    io::copy(&mut d, &mut obj_data)?;
-
-    Ok(obj_data)
-}
-
 // resolve a reference to its hash string
 pub fn resolve_reference(git_path: &str, ref_name: ReferenceName) -> Result<String, GitError> {
     if ref_name.0.starts_with(SYM_REF_PREFIX) {
@@ -324,22 +351,35 @@ pub fn get_ref(git_path: &str, ref_name: &str) -> Result<String, GitError> {
     Ok(ref_data.trim().to_string())
 }
 
-fn get_obj_path(hash_str: &str) -> (String, String) {
-    let git_path = env::var("GIT_TEST_PATH").unwrap_or(".git".to_string());
-    let dir = format!("{}/{}/{}", git_path, OBJECTS_DIR, &hash_str[..2]);
-    (dir.clone(), dir + "/" + &hash_str[2..])
-}
-
-fn check_obj_exists(hash: &str) -> bool {
-    let (_, obj_file) = get_obj_path(hash);
-    fs::metadata(obj_file).is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::{FixedOffset, TimeZone};
 
     use crate::{errors::GitError, plumbing::reference::ReferenceName};
+
+    #[test]
+    fn test_encode_signature() {
+        use crate::plumbing::object::Signature;
+
+        let date_time = FixedOffset::east_opt(0)
+            .unwrap()
+            .timestamp_opt(1767268800, 0)
+            .single()
+            .unwrap();
+
+        let signature = Signature {
+            name: "John Doe".to_string(),
+            email: "john.doe@example.com".to_string(),
+            when: date_time,
+        };
+        let encoded = signature.encode();
+        let expected = format!(
+            "John Doe <john.doe@example.com> {} {}",
+            date_time.timestamp(),
+            date_time.format("%z")
+        );
+        assert_eq!(encoded, expected);
+    }
 
     #[test]
     fn test_resolve_reference() {
@@ -394,9 +434,18 @@ mod tests {
 
     #[test]
     fn test_read_commit() -> Result<(), GitError> {
-        use crate::plumbing::object::read_commit;
         let commit_hash = "56915488f2942031acbef36632381ab5e6c49da2";
-        let commit = read_commit(commit_hash)?;
+
+        let obj_store = {
+            use crate::plumbing::object::ObjectStore;
+            use std::path::Path;
+            use std::env;
+
+            let git_path = env::var("GIT_TEST_WT_PATH")
+                .unwrap_or_else(|_| "/tmp/git_test".to_string());
+            ObjectStore::new(Path::new(&git_path).to_path_buf())
+        };
+        let commit = obj_store.read_commit(commit_hash)?;
 
         let tree_bs = base16ct::lower::decode_vec("67689801da7873d968dd796809729bb03f47a573")
             .map_err(|e| GitError::Base16ctError(e))?;

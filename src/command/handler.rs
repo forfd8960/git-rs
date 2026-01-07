@@ -25,7 +25,7 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
             let current_dir = env::current_dir().unwrap();
             let root = current_dir.to_str().unwrap();
 
-            let mut work_tree = Worktree::new(root.to_string());
+            let mut work_tree = Worktree::new(root);
             work_tree.add(&opts.path_spec)?
         }
         GitSubCommand::Commit(opts) => {
@@ -43,7 +43,7 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
 
         GitSubCommand::ReadIndex => {
             let root = current_dir.to_str().unwrap();
-            let work_tree = Worktree::new(root.to_string());
+            let work_tree = Worktree::new(root);
             let idx = work_tree.read_index()?;
             println!("{:?}", idx);
         }

@@ -17,19 +17,6 @@ impl Blob {
         Blob { hash, size, data }
     }
 
-    pub fn from(_: &str, hash_str: &str) -> anyhow::Result<Self> {
-        let obj_data = object::read_object(hash_str)?;
-
-        let mut blob = Blob {
-            hash: Hash::from(hash_str),
-            size: 0,
-            data: Vec::new(),
-        };
-        blob.decode(&obj_data)?;
-
-        Ok(blob)
-    }
-
     // data is: "blob " + size(content) + "\0" + content
     pub fn decode(&mut self, data: &[u8]) -> anyhow::Result<()> {
         // check header

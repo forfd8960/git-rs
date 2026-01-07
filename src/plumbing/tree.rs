@@ -1,12 +1,13 @@
-use std::collections::HashMap;
 use std::env;
+use std::{collections::HashMap, path::Path};
 
 use super::hash::Hash;
+use crate::plumbing::object::GIT_DIR;
 use crate::{
     errors::GitError,
     plumbing::{
         filemode, hash, index,
-        object::{self, ObjectType},
+        object::{self, ObjectStore, ObjectType},
     },
 };
 
@@ -53,7 +54,9 @@ type TreeEntry struct {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tree<'a> {
+    pub root_path: String,
     pub obj_path: String,
+    pub obj_store: ObjectStore,
     pub entries: Vec<TreeEntry>,
     pub hash: Hash,
     pub m: HashMap<String, &'a TreeEntry>,
@@ -68,18 +71,20 @@ pub struct TreeEntry {
 }
 
 impl Tree<'_> {
-    pub fn new(obj_path: &str) -> Self {
+    pub fn new(root: &str) -> Self {
         Tree {
-            obj_path: obj_path.to_string(),
             entries: Vec::new(),
             hash: Hash::default(),
             m: HashMap::new(),
             t: HashMap::new(),
+            root_path: root.to_string(),
+            obj_path: root.to_string() + "/" + GIT_DIR + "/objects",
+            obj_store: ObjectStore::new(Path::new(root).to_path_buf()),
         }
     }
     // load tree from a given tree object hash from objects storage
     pub fn from(&mut self, hash: &str) -> anyhow::Result<()> {
-        let tree_obj = object::read_object(hash)?;
+        let tree_obj = self.obj_store.read_object(hash)?;
         self.decode(&tree_obj)?;
         Ok(())
     }
@@ -143,17 +148,21 @@ impl Tree<'_> {
 }
 
 pub struct BuildTreeHelper<'a> {
+    pub root_path: String,
     pub obj_path: String,
+    pub obj_store: ObjectStore,
     pub trees: HashMap<String, Tree<'a>>,
     pub entries: HashMap<String, TreeEntry>,
 }
 
 impl BuildTreeHelper<'_> {
-    pub fn new(obj_path: &str) -> Self {
+    pub fn new(root: &str) -> Self {
         BuildTreeHelper {
-            obj_path: obj_path.to_string(),
+            root_path: root.to_string(),
             trees: HashMap::new(),
             entries: HashMap::new(),
+            obj_path: root.to_string() + "/" + GIT_DIR + "/objects",
+            obj_store: ObjectStore::new(Path::new(root).to_path_buf()),
         }
     }
 
@@ -165,7 +174,8 @@ impl BuildTreeHelper<'_> {
     }
 
     pub fn build_tree_entries(&mut self, idx: &index::Index) {
-        self.trees.insert("".to_string(), Tree::new(&self.obj_path));
+        self.trees
+            .insert("".to_string(), Tree::new(&self.root_path));
 
         for e in &idx.entries {
             self.build_index_entry(e);
@@ -207,7 +217,7 @@ impl BuildTreeHelper<'_> {
             te.hash = Hash::from(e.hash.clone());
         } else {
             te.mode = filemode::DIR;
-            let subtree = Tree::new(&self.obj_path);
+            let subtree = Tree::new(&self.root_path);
             self.trees.insert(fullpath.to_string(), subtree);
         }
 
@@ -263,7 +273,7 @@ impl BuildTreeHelper<'_> {
         );
 
         let hash_bytes = hash::compute_hash(&ObjectType::TreeObject, &tree_bs);
-        object::write_tree(tree_bs, &hash_bytes)?;
+        self.obj_store.write_tree(tree_bs, &hash_bytes)?;
         Ok(Hash::from(hash_bytes))
     }
 }
@@ -318,15 +328,21 @@ mod tests {
 
     #[test]
     fn test_build_tree_entries() {
-        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let root = env::var("GIT_TEST_WT_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        println!("worktree root path: {}", root);
+
+        let git_path = root.as_str().to_owned() + "/.git";
         let index_path = format!("{}/index", git_path);
+
+        println!("index path: {}", index_path);
+
         let idx = Index::from(&index_path).unwrap();
-        let mut bth = BuildTreeHelper::new(format!("{}/objects", git_path).as_str());
+        let mut bth = BuildTreeHelper::new(&root);
         bth.build_tree_entries(&idx);
 
         assert_eq!(bth.trees.len(), 2);
 
-        let mut expect_tree = Tree::new(format!("{}/objects", git_path).as_str());
+        let mut expect_tree = Tree::new(&root);
         expect_tree.entries.push(TreeEntry {
             name: "test1.txt".to_string(),
             mode: filemode::REGULAR,
@@ -345,7 +361,7 @@ mod tests {
 
         assert_eq!(bth.trees.get("").unwrap(), &expect_tree);
 
-        let mut expect_tree1 = Tree::new(format!("{}/objects", git_path).as_str());
+        let mut expect_tree1 = Tree::new(&root);
         expect_tree1.entries.push(TreeEntry {
             name: "test1-1.txt".to_string(),
             mode: filemode::REGULAR,
@@ -360,11 +376,12 @@ mod tests {
 
     #[test]
     fn test_build_tree_helper() -> anyhow::Result<()> {
-        let git_path = env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
-        let index_path = format!("{}/index", git_path);
+        let root_path =
+            env::var("GIT_TEST_WT_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        let index_path = format!("{}/index", root_path.clone() + "/.git");
         let idx = Index::from(&index_path)?;
 
-        let mut bth = BuildTreeHelper::new(&format!("{}/objects", git_path));
+        let mut bth = BuildTreeHelper::new(&root_path);
         let tree_hash = bth.build_tree(&idx)?;
 
         println!("built tree hash: {:}", tree_hash.to_string());

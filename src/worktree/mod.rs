@@ -13,18 +13,21 @@ use crate::{
     plumbing::{
         filemode, hash,
         index::{Entry, Index},
-        object::{self, ObjectType},
+        object::{self, ObjectStore, ObjectType},
     },
     worktree::status::detect_changes,
 };
 
-const GIT_DIR: &str = "/.git";
+const GIT_DIR: &str = ".git";
 const OBJECTS_DIR: &str = "/objects";
 const HEAD_FILE: &str = "/HEAD";
 const IDX_NAME: &str = "index";
 
 pub struct Worktree {
+    pub root_path: String,
     pub git_dir_path: String,
+    pub obj_store: ObjectStore,
+    pub index_dir: String,
 }
 
 pub struct FileInfo {
@@ -34,16 +37,17 @@ pub struct FileInfo {
 }
 
 impl Worktree {
-    pub fn new(cur_dir: String) -> Self {
+    pub fn new(root: &str) -> Self {
         Worktree {
-            git_dir_path: cur_dir + GIT_DIR,
+            root_path: root.to_string(),
+            git_dir_path: root.to_string() + "/" + GIT_DIR,
+            index_dir: root.to_string() + "/" + GIT_DIR + "/" + IDX_NAME,
+            obj_store: ObjectStore::new(Path::new(root).to_path_buf()),
         }
     }
 
     pub fn add(&mut self, add_file: &str) -> Result<(), GitError> {
-        println!("dot_git: {}", self.git_dir_path);
-
-        let file_path = self.git_dir_path.clone() + "/" + add_file;
+        let file_path = self.root_path.clone() + "/" + add_file;
         println!("file_path: {}", file_path);
 
         let mut file = File::open(&file_path)?;
@@ -56,7 +60,7 @@ impl Worktree {
         self.add_file_to_index(&file_path, &hash_bytes, &add_file_metadata)
     }
 
-    pub fn add_files(&mut self, files: Vec<&str>) -> Result<(), GitError> {
+    pub fn add_files(&self, files: Vec<&str>) -> Result<(), GitError> {
         if files.len() == 0 {
             return Ok(());
         }
@@ -81,7 +85,7 @@ impl Worktree {
         self.add_files_to_index(idx_files)
     }
 
-    pub fn remove_files(&mut self, files: Vec<&str>) -> Result<(), GitError> {
+    pub fn remove_files(&self, files: Vec<&str>) -> Result<(), GitError> {
         if files.len() == 0 {
             return Ok(());
         }
@@ -98,7 +102,7 @@ impl Worktree {
         let hash_bytes = hash::compute_hash(&ObjectType::BlobObject, content);
         println!("hash: {:?}, len: {}", hash_bytes, hash_bytes.len());
 
-        let obj_blob_path = object::write_blob(content.to_vec(), &hash_bytes)?;
+        let obj_blob_path = self.obj_store.write_blob(content.to_vec(), &hash_bytes)?;
         println!("successfully write object to: {}", obj_blob_path);
         Ok(hash_bytes)
     }
@@ -155,9 +159,9 @@ impl Worktree {
         Ok(index)
     }
 
-    pub fn auto_add_modified_and_deleted(&mut self) -> Result<(), GitError> {
+    pub fn auto_add_modified_and_deleted(&self) -> Result<(), GitError> {
         let idx = self.read_index()?;
-        let working_dir = self.git_dir_path.replace(GIT_DIR, "");
+        let working_dir = self.root_path.clone();
         let status = detect_changes(&idx, working_dir.as_str())?;
 
         self.add_files(

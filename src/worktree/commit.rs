@@ -2,8 +2,10 @@ use crate::{
     config::Config,
     errors::GitError,
     plumbing::{
-        hash::Hash,
-        object::{self, Signature},
+        commit::Commit,
+        hash::{compute_hash_without_type, Hash},
+        object::{self, ObjectType, Signature},
+        tree::BuildTreeHelper,
     },
     worktree::Worktree,
 };
@@ -112,6 +114,50 @@ impl Committer for Worktree {
     fn commit(&self, msg: &str, opts: &mut CommitOptions) -> Result<Hash, GitError> {
         opts.validate()?;
 
-        Ok(Hash([0; 20])) // TODO: implement commit logic
+        if opts.all {
+            self.auto_add_modified_and_deleted()?;
+        }
+
+        if opts.amend {
+            let head = object::head_ref(&self.root_path)?;
+            let head_commit = self.obj_store.read_commit(&head)?;
+            opts.parents = head_commit
+                .parent_hashes
+                .iter()
+                .map(|ph| Hash::from(ph.clone()))
+                .collect();
+        }
+
+        let idx = self.read_index()?;
+        if opts.parents.is_empty() && idx.entries.is_empty() && !opts.allow_empty_commits {
+            return Err(GitError::EmptyCommit);
+        }
+        let mut tree_helper = BuildTreeHelper::new(&self.root_path);
+        let tree_hash = tree_helper.build_tree(&idx)?;
+
+        let prev_tree = if !opts.parents.is_empty() {
+            let parent_commit = self.obj_store.read_commit(&opts.parents[0].to_string())?;
+            Hash::from(parent_commit.tree_hash)
+        } else {
+            Hash::new([0; 20])
+        };
+
+        if tree_hash == prev_tree && !opts.allow_empty_commits {
+            return Err(GitError::EmptyCommit);
+        }
+
+        let commit = Commit::new(
+            msg,
+            tree_hash.0.to_vec(),
+            opts.parents.iter().map(|ph| ph.0.to_vec()).collect(),
+            opts.author.clone().unwrap(),
+            opts.committer.clone().unwrap(),
+        );
+
+        let data = commit.encode();
+        let commit_hash = compute_hash_without_type(&data);
+
+        let _ = self.obj_store.write_commit(data, &commit_hash)?;
+        Ok(Hash::from(commit_hash))
     }
 }

@@ -54,3 +54,13 @@ pub fn compute_hash(t: &ObjectType, content: &[u8]) -> Vec<u8> {
     let arr = hf.hash();
     arr.to_vec()
 }
+
+
+pub fn compute_hash_without_type( content: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha1::new();
+    hasher.update(content);
+
+    let hf = hasher.try_finalize();
+    let arr = hf.hash();
+    arr.to_vec()
+}
