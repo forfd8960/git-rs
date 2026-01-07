@@ -1,5 +1,4 @@
 use anyhow::bail;
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -25,7 +24,7 @@ impl Decoder {
         }
     }
 
-    pub fn decode(&mut self, idx: &mut Index) -> Result<()> {
+    pub fn decode(&mut self, idx: &mut Index) -> Result<(), GitError> {
         idx.version = self.validate_header()?;
         println!("index version: {}", idx.version);
 
@@ -37,36 +36,36 @@ impl Decoder {
         Ok(())
     }
 
-    pub fn read_u32(&mut self) -> Result<u32> {
+    pub fn read_u32(&mut self) -> Result<u32, GitError> {
         Ok(self.index_file.read_u32::<BigEndian>()?)
     }
 
-    pub fn read_u16(&mut self) -> Result<u16> {
+    pub fn read_u16(&mut self) -> Result<u16, GitError> {
         Ok(self.index_file.read_u16::<BigEndian>()?)
     }
 
-    pub fn read_hash(&mut self) -> Result<Vec<u8>> {
+    pub fn read_hash(&mut self) -> Result<Vec<u8>, GitError> {
         let mut buf = [0; hash::SIZE as usize];
         self.index_file.read_exact(&mut buf)?;
         Ok(buf.to_vec())
     }
 
-    fn validate_header(&mut self) -> Result<u32> {
+    fn validate_header(&mut self) -> Result<u32, GitError> {
         let mut buf = [0; 4];
         self.index_file.read_exact(&mut buf)?;
 
         if !buf.eq(&INDEX_SIG) {
-            bail!(GitError::MalformedIndexSignature);
+            return Err(GitError::MalformedIndexSignature);
         }
 
         let version = self.read_u32()?;
         if version < INDEX_VERSION_MIN || version > INDEX_VERSION_MAX {
-            bail!(GitError::UnsupportedIndexVersion);
+            return Err(GitError::UnsupportedIndexVersion);
         }
         Ok(version)
     }
 
-    fn read_entries(&mut self, entry_count: u32, idx: &mut Index) -> Result<()> {
+    fn read_entries(&mut self, entry_count: u32, idx: &mut Index) -> Result<(), GitError> {
         for entry_idx in 0..entry_count {
             println!("reading the {} entry", entry_idx);
 
@@ -76,7 +75,7 @@ impl Decoder {
         Ok(())
     }
 
-    fn read_entry(&mut self, idx: &mut Index) -> Result<()> {
+    fn read_entry(&mut self, idx: &mut Index) -> Result<(), GitError> {
         let mut entry = Entry::new();
         let sec = self.read_u32()?;
         let nsec = self.read_u32()?;
@@ -129,7 +128,7 @@ impl Decoder {
         Ok(())
     }
 
-    fn read_entry_name(&mut self, idx: &Index, flags: u16) -> Result<String> {
+    fn read_entry_name(&mut self, idx: &Index, flags: u16) -> Result<String, GitError> {
         match idx.version {
             2 | 3 => {
                 let len = (flags & ENTRY_NAME_MASK) as usize;
@@ -139,11 +138,11 @@ impl Decoder {
                 self.index_file.read_exact(&mut buf)?;
                 Ok(String::from_utf8_lossy(&buf).to_string())
             }
-            _ => bail!(GitError::NotSupportedIndexVersion),
+            _ => return Err(GitError::NotSupportedIndexVersion),
         }
     }
 
-    fn pad_entry(&mut self, e: &Entry, read_len: u32) -> Result<()> {
+    fn pad_entry(&mut self, e: &Entry, read_len: u32) -> Result<(), GitError> {
         println!("pad entry: {}", read_len);
 
         let entry_size = read_len + e.name.len() as u32;

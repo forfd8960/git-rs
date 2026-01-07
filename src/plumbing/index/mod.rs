@@ -17,14 +17,19 @@ const (
 )
 */
 
-use std::{fmt::Display, fs::File, time};
+use std::{
+    fmt::Display,
+    fs::{self, File},
+    os::unix::fs::MetadataExt,
+    time,
+};
 
-use anyhow::{bail, Result};
+use anyhow::bail;
 use chrono::{format, DateTime, Utc};
 use decoder::Decoder;
 use encoder::Encoder;
 
-use crate::errors::GitError;
+use crate::{errors::GitError, plumbing::object};
 
 const INDEX_SIG: [u8; 4] = [b'D', b'I', b'R', b'C'];
 const INDEX_VERSION_MIN: u32 = 2;
@@ -120,7 +125,7 @@ impl Index {
         }
     }
 
-    pub fn from(index_path: &str) -> Result<Self> {
+    pub fn from(index_path: &str) -> Result<Self, GitError> {
         let mut idx = Index::new();
 
         let index_reader = File::open(index_path).expect(&format!(
@@ -132,17 +137,68 @@ impl Index {
         Ok(idx)
     }
 
-    pub fn set(mut idx: Index, file: File) -> Result<()> {
+    pub fn add_file(
+        &mut self,
+        file_path: &str,
+        hash_bytes: &[u8],
+        metadata: &fs::Metadata,
+    ) -> Result<(), GitError> {
+        let blob_name = object::get_filename(file_path);
+        let entry = self.entry(blob_name);
+
+        match entry {
+            Some(_) => {
+                self.update_entry(blob_name.to_string(), hash_bytes, metadata)?;
+            }
+            None => {
+                let e = self.fill_entry(&blob_name, hash_bytes, metadata)?;
+                self.add(&e);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn add(&mut self, e: &Entry) {
+        self.entries.push(e.clone());
+    }
+
+    pub fn set(mut idx: Index, file: File) -> Result<(), GitError> {
         let mut idx_encoder: Encoder = Encoder::new(file);
         idx_encoder.encode(&mut idx)?;
         Ok(())
+    }
+
+    pub fn remove_entry(&mut self, path: &str) -> Result<(), GitError> {
+        let idx = self.entries.iter().position(|e| e.name == path);
+        match idx {
+            Some(idx) => {
+                self.entries.remove(idx);
+                Ok(())
+            }
+            _ => Err(GitError::EntryNotFound(path.to_string())),
+        }
     }
 
     pub fn entry(&self, path: &str) -> Option<&Entry> {
         self.entries.iter().find(|e| e.name == path)
     }
 
-    pub fn update_entry(&mut self, new_entry: Entry) -> anyhow::Result<()> {
+    pub fn update_entry(
+        &mut self,
+        name: String,
+        hash_bytes: &[u8],
+        metadata: &fs::Metadata,
+    ) -> Result<(), GitError> {
+        let mut new_entry = Entry::new();
+
+        new_entry.name = name.to_string();
+        new_entry.hash = hash_bytes.to_vec();
+        new_entry.modified_at = metadata.modified()?;
+        new_entry.size = metadata.size() as u32;
+
+        object::fill_sys_info(&mut new_entry, metadata);
+
         let idx = self
             .entries
             .iter_mut()
@@ -152,14 +208,28 @@ impl Index {
                 let old_entry = self.entries.remove(idx);
                 self.entries[idx] = Entry::from_old_new_entry(old_entry, new_entry);
             }
-            _ => bail!(GitError::EntryNotFound),
+            _ => return Err(GitError::EntryNotFound(new_entry.name)),
         }
 
         Ok(())
     }
 
-    pub fn add(&mut self, e: &Entry) {
-        self.entries.push(e.clone());
+    pub fn fill_entry(
+        &mut self,
+        filename: &str,
+        hash_bytes: &[u8],
+        metadata: &fs::Metadata,
+    ) -> Result<Entry, GitError> {
+        let mut ent = Entry::new();
+
+        ent.name = filename.to_string();
+        ent.hash = hash_bytes.to_vec();
+        ent.created_at = metadata.created()?;
+        ent.modified_at = metadata.modified()?;
+        ent.size = metadata.size() as u32;
+
+        object::fill_sys_info(&mut ent, metadata);
+        Ok(ent)
     }
 }
 

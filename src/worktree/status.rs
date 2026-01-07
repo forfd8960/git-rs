@@ -1,6 +1,17 @@
-use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+};
 
-use crate::{errors::GitError, plumbing::{hash::compute_hash, index::{self}, object::ObjectType}};
+use crate::{
+    errors::GitError,
+    plumbing::{
+        hash::compute_hash,
+        index::{self},
+        object::ObjectType,
+    },
+};
 
 pub struct GitStatus {
     modified: Vec<String>,
@@ -15,6 +26,18 @@ impl GitStatus {
             added: Vec::new(),
             deleted: Vec::new(),
         }
+    }
+
+    pub fn modified(&self) -> &Vec<String> {
+        &self.modified
+    }
+
+    pub fn added(&self) -> &Vec<String> {
+        &self.added
+    }
+
+    pub fn deleted(&self) -> &Vec<String> {
+        &self.deleted
     }
 }
 
@@ -85,7 +108,10 @@ fn scan_untracked_files(
         }
 
         if path.is_file() {
-            let p = path.strip_prefix(&working_dir)?.to_string_lossy().to_string();
+            let p = path
+                .strip_prefix(&working_dir)?
+                .to_string_lossy()
+                .to_string();
             untracked_files.push(p);
         }
 
@@ -107,13 +133,13 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_detect_change() -> Result<(), GitError>{
+    fn test_detect_change() -> Result<(), GitError> {
         let idx = Index::from(&format!(
             "{}/index",
             env::var("GIT_TEST_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string())
         ))
         .unwrap();
-        
+
         let working_dir = PathBuf::from(
             env::var("GIT_TEST_WT_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string()),
         );
@@ -123,7 +149,9 @@ mod tests {
         println!("Added files: {:?}", status.added);
         println!("Deleted files: {:?}", status.deleted);
 
-        assert_eq!(status.modified.len(), 0);
+        assert_eq!(status.modified.len(), 1);
+        assert_eq!(status.modified[0], "test2.txt");
+
         assert_eq!(status.added.len(), 1);
         assert_eq!(status.deleted.len(), 0);
         assert_eq!(status.added[0], "test3.txt");

@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use super::hash::Hash;
+use std::fmt::Display;
 
 pub const REF_PREFIX: &'static str = "refs/";
 pub const REF_HEAD_PREFIX: &'static str = concat!("refs/", "heads/");
@@ -88,4 +88,3 @@ impl Display for ReferenceName {
         write!(f, "{}", self.0)
     }
 }
-

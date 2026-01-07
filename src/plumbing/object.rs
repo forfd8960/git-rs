@@ -3,6 +3,8 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::{self, Write},
+    os::unix::fs::MetadataExt,
+    path::Path,
 };
 
 use flate2::Compression;
@@ -13,6 +15,8 @@ use crate::{
     plumbing::{
         blob::Blob,
         commit::Commit,
+        filemode,
+        index::Entry,
         reference::{ReferenceName, SYM_REF_PREFIX},
     },
 };
@@ -111,6 +115,22 @@ impl Signature {
     }
 }
 
+pub fn get_filename(path: &str) -> &str {
+    let filename = Path::new(path).file_name().unwrap();
+    filename.to_str().unwrap()
+}
+
+pub fn fill_sys_info(e: &mut Entry, metadata: &fs::Metadata) {
+    e.dev = metadata.dev() as u32;
+    e.inode = metadata.ino() as u32;
+
+    //todo: set mode from file mode
+    e.mode = filemode::REGULAR;
+    e.stage = 0;
+    e.gid = metadata.gid() as u32;
+    e.uid = metadata.uid() as u32;
+}
+
 fn parse_timezone(tz: &str) -> Result<FixedOffset, GitError> {
     if tz.len() != 5 {
         return Err(GitError::InvalidSignature(
@@ -170,7 +190,7 @@ pub fn object_type_string(object_type: &ObjectType) -> &'static str {
     }
 }
 
-pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> anyhow::Result<String> {
+pub fn write_blob(content: Vec<u8>, hash_bytes: &[u8]) -> Result<String, GitError> {
     let hash_str = base16ct::lower::encode_string(hash_bytes);
     let (blob_dir, file_name) = get_obj_path(&hash_str);
     println!("[write_blob] blob dir: {}", blob_dir.clone());

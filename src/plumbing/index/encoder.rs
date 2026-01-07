@@ -7,6 +7,8 @@ use std::{
     time::UNIX_EPOCH,
 };
 
+use crate::errors::GitError;
+
 use super::{Entry, Index, ENTRY_HEADER_LENGTH, ENTRY_NAME_MASK, INDEX_SIG};
 
 pub struct Encoder {
@@ -22,7 +24,7 @@ impl Encoder {
         }
     }
 
-    pub fn encode(&mut self, index: &mut Index) -> anyhow::Result<()> {
+    pub fn encode(&mut self, index: &mut Index) -> Result<(), GitError> {
         println!("encoding index");
 
         self.encode_header(index)?;
@@ -36,7 +38,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn encode_header(&mut self, index: &mut Index) -> anyhow::Result<()> {
+    fn encode_header(&mut self, index: &mut Index) -> Result<(), GitError> {
         println!("encoding headers");
 
         self.writer.write_all(&INDEX_SIG)?;
@@ -51,7 +53,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn encode_entries(&mut self, index: &mut Index) -> anyhow::Result<()> {
+    fn encode_entries(&mut self, index: &mut Index) -> Result<(), GitError> {
         println!("encoding entries");
         index.entries.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -70,7 +72,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn encode_entry(&mut self, entry: &Entry) -> anyhow::Result<()> {
+    fn encode_entry(&mut self, entry: &Entry) -> Result<(), GitError> {
         let dur = entry.created_at.duration_since(UNIX_EPOCH)?;
         let dur1 = entry.modified_at.duration_since(UNIX_EPOCH)?;
 
@@ -107,7 +109,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn pad_entry(&mut self, wrote: u32) -> anyhow::Result<()> {
+    fn pad_entry(&mut self, wrote: u32) -> Result<(), GitError> {
         let pad_len = 8 - wrote % 8;
 
         let mut buf = Vec::with_capacity(pad_len as usize);
@@ -119,7 +121,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn encode_footer(&mut self) -> anyhow::Result<()> {
+    fn encode_footer(&mut self) -> Result<(), GitError> {
         println!("encoding footer");
 
         let mut hasher = Sha1::new();
@@ -133,7 +135,7 @@ impl Encoder {
         Ok(())
     }
 
-    fn write_multiple_data(&mut self, data: Vec<u32>) -> anyhow::Result<()> {
+    fn write_multiple_data(&mut self, data: Vec<u32>) -> Result<(), GitError> {
         for d in data {
             self.writer.write_u32::<BigEndian>(d)?;
             self.buf.write_u32::<BigEndian>(d)?;

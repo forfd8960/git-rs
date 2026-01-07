@@ -1,13 +1,16 @@
 use crate::{
     config::Config,
     errors::GitError,
-    plumbing::{hash::Hash, object::Signature},
+    plumbing::{
+        hash::Hash,
+        object::{self, Signature},
+    },
     worktree::Worktree,
 };
 
 pub trait Committer {
     // msg string, opts *CommitOptions
-    fn commit(&self, msg: &str, opts: CommitOptions) -> Result<Hash, GitError>;
+    fn commit(&self, msg: &str, opts: &mut CommitOptions) -> Result<Hash, GitError>;
 }
 
 /*
@@ -66,36 +69,6 @@ impl CommitOptions {
     }
 
     pub fn validate(&mut self) -> Result<(), GitError> {
-        /*
-            if o.All && o.Amend {
-            return errors.New("all and amend cannot be used together")
-        }
-
-        if o.Amend && len(o.Parents) > 0 {
-            return errors.New("parents cannot be used with amend")
-        }
-
-        if o.Author == nil {
-            if err := o.loadConfigAuthorAndCommitter(r); err != nil {
-                return err
-            }
-        }
-
-        if o.Committer == nil {
-            o.Committer = o.Author
-        }
-
-        if len(o.Parents) == 0 {
-            head, err := r.Head()
-            if err != nil && !errors.Is(err, plumbing.ErrReferenceNotFound) {
-                return err
-            }
-
-            if head != nil {
-                o.Parents = []plumbing.Hash{head.Hash()}
-            }
-        }
-            */
         if self.amend && self.all {
             return Err(GitError::InvalidCommitOptions(
                 "all and amend cannot be used together".to_string(),
@@ -114,6 +87,12 @@ impl CommitOptions {
             self.committer = self.author.clone();
         }
 
+        if self.parents.is_empty() {
+            //load head hash
+            let head_hash = object::head_ref(&self.git_path)?;
+            self.parents = vec![Hash::from(head_hash.as_str())];
+        }
+
         Ok(())
     }
 
@@ -129,10 +108,10 @@ impl CommitOptions {
     }
 }
 
-
-
 impl Committer for Worktree {
-    fn commit(&self, msg: &str, opts: CommitOptions) -> Result<Hash, GitError> {
+    fn commit(&self, msg: &str, opts: &mut CommitOptions) -> Result<Hash, GitError> {
+        opts.validate()?;
+
         Ok(Hash([0; 20])) // TODO: implement commit logic
     }
 }

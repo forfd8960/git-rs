@@ -17,8 +17,8 @@ pub enum GitError {
     #[error("not supported index version")]
     NotSupportedIndexVersion,
 
-    #[error("entry not found")]
-    EntryNotFound,
+    #[error("entry not found: {0}")]
+    EntryNotFound(String),
 
     #[error("missing author information")]
     MissingAuthor,

@@ -8,10 +8,14 @@ use std::{
     path::Path,
 };
 
-use crate::plumbing::{
-    filemode, hash,
-    index::{Entry, Index},
-    object::{self, ObjectType},
+use crate::{
+    errors::GitError,
+    plumbing::{
+        filemode, hash,
+        index::{Entry, Index},
+        object::{self, ObjectType},
+    },
+    worktree::status::detect_changes,
 };
 
 const GIT_DIR: &str = "/.git";
@@ -23,6 +27,12 @@ pub struct Worktree {
     pub git_dir_path: String,
 }
 
+pub struct FileInfo {
+    path: String,
+    hash: Vec<u8>,
+    metadata: fs::Metadata,
+}
+
 impl Worktree {
     pub fn new(cur_dir: String) -> Self {
         Worktree {
@@ -30,7 +40,7 @@ impl Worktree {
         }
     }
 
-    pub fn add(&mut self, add_file: &str) -> anyhow::Result<()> {
+    pub fn add(&mut self, add_file: &str) -> Result<(), GitError> {
         println!("dot_git: {}", self.git_dir_path);
 
         let file_path = self.git_dir_path.clone() + "/" + add_file;
@@ -46,7 +56,45 @@ impl Worktree {
         self.add_file_to_index(&file_path, &hash_bytes, &add_file_metadata)
     }
 
-    fn add_file_to_storage(&self, content: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn add_files(&mut self, files: Vec<&str>) -> Result<(), GitError> {
+        if files.len() == 0 {
+            return Ok(());
+        }
+
+        let mut idx_files = Vec::new();
+        for add_file in files {
+            let file_path = self.git_dir_path.clone() + "/" + add_file;
+            let mut file = File::open(&file_path)?;
+            let mut content = Vec::new();
+            file.read_to_end(&mut content)?;
+
+            let hash_bytes = self.add_file_to_storage(&content)?;
+            let add_file_metadata = file.metadata()?;
+
+            idx_files.push(FileInfo {
+                path: file_path,
+                hash: hash_bytes,
+                metadata: add_file_metadata,
+            });
+        }
+
+        self.add_files_to_index(idx_files)
+    }
+
+    pub fn remove_files(&mut self, files: Vec<&str>) -> Result<(), GitError> {
+        if files.len() == 0 {
+            return Ok(());
+        }
+
+        let mut idx = self.read_index()?;
+        for f in files {
+            idx.remove_entry(f)?;
+        }
+
+        self.write_index(idx)
+    }
+
+    fn add_file_to_storage(&self, content: &[u8]) -> Result<Vec<u8>, GitError> {
         let hash_bytes = hash::compute_hash(&ObjectType::BlobObject, content);
         println!("hash: {:?}, len: {}", hash_bytes, hash_bytes.len());
 
@@ -60,26 +108,37 @@ impl Worktree {
         file_path: &str,
         hash_bytes: &[u8],
         metadata: &fs::Metadata,
-    ) -> anyhow::Result<()> {
-        let index_path = self.git_dir_path.clone() + "/index";
-        let mut index = self.read_index()?;
-        println!("{:?}", index);
+    ) -> Result<(), GitError> {
+        let index_path = self.git_dir_path.clone() + "/" + IDX_NAME;
+        println!("index_path: {}", index_path);
 
-        let blob_name = get_filename(file_path);
-        let entry = index.entry(blob_name);
+        let mut index = Index::from(&index_path)?;
+        index.add_file(file_path, hash_bytes, metadata)?;
 
-        match entry {
-            Some(_) => {
-                self.update_entry(&mut index, blob_name.to_string(), hash_bytes, metadata)?;
-            }
-            None => {
-                let mut e = Entry::new();
-                self.fill_entry(&mut e, &blob_name, hash_bytes, metadata)?;
-                index.add(&e);
-            }
+        // write index to index file
+        self.write_index(index)
+    }
+
+    pub fn add_files_to_index(&self, files: Vec<FileInfo>) -> Result<(), GitError> {
+        let index_path = self.git_dir_path.clone() + "/" + IDX_NAME;
+        println!("index_path: {}", index_path);
+
+        let mut index = Index::from(&index_path)?;
+
+        for file in files {
+            let file_path = file.path;
+            let hash_bytes = file.hash;
+            let metadata = file.metadata;
+            index.add_file(&file_path, &hash_bytes, &metadata)?;
         }
 
         // write index to index file
+        self.write_index(index)
+    }
+
+    pub fn write_index(&self, index: Index) -> Result<(), GitError> {
+        let index_path = self.git_dir_path.clone() + "/" + IDX_NAME;
+
         let index_file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -87,67 +146,29 @@ impl Worktree {
             .open(&index_path)?;
 
         println!("set index file back to: {}", index_path);
-        Index::set(index, index_file)?;
-
-        Ok(())
+        Index::set(index, index_file)
     }
 
-    fn fill_entry(
-        &self,
-        e: &mut Entry,
-        filename: &str,
-        hash_bytes: &[u8],
-        metadata: &fs::Metadata,
-    ) -> anyhow::Result<()> {
-        e.name = filename.to_string();
-        e.hash = hash_bytes.to_vec();
-        e.created_at = metadata.created()?;
-        e.modified_at = metadata.modified()?;
-        e.size = metadata.size() as u32;
-
-        self.fill_sys_info(e, metadata);
-        Ok(())
-    }
-
-    fn update_entry(
-        &self,
-        idx: &mut Index,
-        name: String,
-        hash_bytes: &[u8],
-        metadata: &fs::Metadata,
-    ) -> anyhow::Result<()> {
-        let mut entry = Entry::new();
-
-        entry.name = name.to_string();
-        entry.hash = hash_bytes.to_vec();
-        entry.modified_at = metadata.modified()?;
-        entry.size = metadata.size() as u32;
-
-        self.fill_sys_info(&mut entry, metadata);
-        idx.update_entry(entry)
-    }
-
-    fn fill_sys_info(&self, e: &mut Entry, metadata: &fs::Metadata) {
-        e.dev = metadata.dev() as u32;
-        e.inode = metadata.ino() as u32;
-
-        //todo: set mode from file mode
-        e.mode = filemode::REGULAR;
-        e.stage = 0;
-        e.gid = metadata.gid() as u32;
-        e.uid = metadata.uid() as u32;
-    }
-
-    pub fn read_index(&self) -> anyhow::Result<Index> {
+    pub fn read_index(&self) -> Result<Index, GitError> {
         let index_path = self.git_dir_path.clone() + "/" + IDX_NAME;
         let index = Index::from(&index_path)?;
-        println!("{}", index);
         Ok(index)
     }
-}
 
-fn get_filename(path: &str) -> &str {
-    let path = Path::new(path);
-    let filename = path.file_name().unwrap();
-    filename.to_str().unwrap()
+    pub fn auto_add_modified_and_deleted(&mut self) -> Result<(), GitError> {
+        let idx = self.read_index()?;
+        let working_dir = self.git_dir_path.replace(GIT_DIR, "");
+        let status = detect_changes(&idx, working_dir.as_str())?;
+
+        self.add_files(
+            status
+                .added()
+                .iter()
+                .chain(status.modified())
+                .map(|f| f.as_str())
+                .collect(),
+        )?;
+        self.remove_files(status.deleted().iter().map(|f| f.as_str()).collect())?;
+        Ok(())
+    }
 }
