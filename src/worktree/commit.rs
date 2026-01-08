@@ -3,7 +3,7 @@ use crate::{
     errors::GitError,
     plumbing::{
         commit::Commit,
-        hash::{compute_hash_without_type, Hash},
+        hash::{compute_hash, Hash},
         object::{self, ObjectType, Signature},
         tree::BuildTreeHelper,
     },
@@ -112,14 +112,16 @@ impl CommitOptions {
 
 impl Committer for Worktree {
     fn commit(&self, msg: &str, opts: &mut CommitOptions) -> Result<Hash, GitError> {
+        println!("validate commit options");
         opts.validate()?;
 
         if opts.all {
+            println!("auto load modified and deleted files");
             self.auto_add_modified_and_deleted()?;
         }
 
         if opts.amend {
-            let head = object::head_ref(&self.root_path)?;
+            let head = object::head_ref(&self.git_dir_path)?;
             let head_commit = self.obj_store.read_commit(&head)?;
             opts.parents = head_commit
                 .parent_hashes
@@ -155,9 +157,54 @@ impl Committer for Worktree {
         );
 
         let data = commit.encode();
-        let commit_hash = compute_hash_without_type(&data);
+        let commit_hash = compute_hash(&ObjectType::CommitObject, &data);
+
+        println!(
+            "writing commit object to object store: {}",
+            Hash::from(commit_hash.clone()).to_string()
+        );
 
         let _ = self.obj_store.write_commit(data, &commit_hash)?;
+
+        println!("update HEAD to point to new commit");
+        self.update_head(&commit_hash)?;
         Ok(Hash::from(commit_hash))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use super::*;
+    use crate::plumbing::object::Signature;
+
+    #[test]
+    fn test_worktree_commit() {
+        let author = Signature::new("John Doe".to_string(), "john.doe@example.com".to_string());
+        let committer = Signature::new("John Doe".to_string(), "john.doe@example.com".to_string());
+        // let commit = Commit::new(
+        //     "Initial commit",
+        //     vec![0; 20],
+        //     vec![],
+        //     author.clone(),
+        //     committer.clone(),
+        // );
+
+        let root = env::var("GIT_TEST_WT_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
+        println!("root: {}", root);
+
+        let wt = Worktree::new(&root);
+        println!("worktree: {:?}", wt);
+
+        let mut opts = CommitOptions::new(&wt.git_dir_path);
+        opts.all = true;
+        opts.author = Some(author);
+        opts.committer = Some(committer);
+        let commit_res = wt.commit("Initial commit", &mut opts);
+        println!("commit_res: {:?}", commit_res);
+
+        assert!(commit_res.is_ok());
+        println!("commit hash: {}", commit_res.unwrap().to_string());
     }
 }

@@ -14,7 +14,7 @@ use crate::{
     errors::GitError,
     plumbing::{
         blob::Blob,
-        commit::Commit,
+        commit::{encode_commit, Commit},
         filemode,
         index::Entry,
         reference::{ReferenceName, SYM_REF_PREFIX},
@@ -117,7 +117,7 @@ impl Signature {
     }
 }
 
-#[derive(Debug, Clone,PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectStore {
     pub root: PathBuf,
     pub git_path: PathBuf,
@@ -142,6 +142,11 @@ impl ObjectStore {
         let (blob_dir, file_name) = self.get_obj_path(&hash_str);
         println!("[write_blob] blob dir: {}", blob_dir.clone());
         println!("[write_blob] file_name: {}", file_name.clone());
+
+        let f_mt = fs::metadata(&file_name);
+        if f_mt.is_ok() {
+            return Ok(file_name.clone());
+        }
 
         fs::create_dir(blob_dir)?;
 
@@ -172,7 +177,11 @@ impl ObjectStore {
         let hash_str = base16ct::lower::encode_string(hash_bytes);
         let (commit_dir, file_name) = self.get_obj_path(&hash_str);
 
-        if self.check_obj_exists(&hash_str) {
+        if fs::metadata(file_name.clone()).is_ok() {
+            println!(
+                "[write_commit] commit object already exists: {}",
+                file_name.clone()
+            );
             return Ok(file_name.clone());
         }
 
@@ -187,7 +196,7 @@ impl ObjectStore {
             .open(file_name.clone())?;
 
         let mut e = ZlibEncoder::new(commit, Compression::default());
-        e.write_all(&data)?;
+        e.write_all(&encode_commit(data))?;
         e.finish()?;
 
         Ok(file_name)
@@ -220,6 +229,29 @@ impl ObjectStore {
         e.finish()?;
 
         Ok(file_name)
+    }
+
+    pub fn write_ref(&self, ref_name: &str, hash_str: &str) -> Result<(), GitError> {
+        let git_path = self.git_path.to_str().unwrap();
+        let ref_path = format!("{}/{}", git_path, ref_name);
+
+        let mut ref_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(ref_path)?;
+
+        ref_file.write_all(hash_str.as_bytes())?;
+        ref_file.flush()?;
+
+        Ok(())
+    }
+
+    pub fn read_ref(&self, ref_name: &str) -> Result<String, GitError> {
+        let git_path = self.git_path.to_str().unwrap();
+        let ref_path = format!("{}/{}", git_path, ref_name);
+        let ref_data = fs::read_to_string(ref_path)?;
+        Ok(ref_data.trim().to_string())
     }
 
     pub fn read_object(&self, hash: &str) -> Result<Vec<u8>, GitError> {
@@ -438,11 +470,11 @@ mod tests {
 
         let obj_store = {
             use crate::plumbing::object::ObjectStore;
-            use std::path::Path;
             use std::env;
+            use std::path::Path;
 
-            let git_path = env::var("GIT_TEST_WT_PATH")
-                .unwrap_or_else(|_| "/tmp/git_test".to_string());
+            let git_path =
+                env::var("GIT_TEST_WT_PATH").unwrap_or_else(|_| "/tmp/git_test".to_string());
             ObjectStore::new(Path::new(&git_path).to_path_buf())
         };
         let commit = obj_store.read_commit(commit_hash)?;

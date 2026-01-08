@@ -4,7 +4,6 @@ pub mod status;
 use std::{
     fs::{self, File, OpenOptions},
     io::Read,
-    os::unix::fs::MetadataExt,
     path::Path,
 };
 
@@ -14,6 +13,8 @@ use crate::{
         filemode, hash,
         index::{Entry, Index},
         object::{self, ObjectStore, ObjectType},
+        reference::{self, Reference, ReferenceName},
+        HEAD,
     },
     worktree::status::detect_changes,
 };
@@ -23,6 +24,7 @@ const OBJECTS_DIR: &str = "/objects";
 const HEAD_FILE: &str = "/HEAD";
 const IDX_NAME: &str = "index";
 
+#[derive(Debug)]
 pub struct Worktree {
     pub root_path: String,
     pub git_dir_path: String,
@@ -46,6 +48,28 @@ impl Worktree {
         }
     }
 
+    pub fn update_head(&self, hash: &Vec<u8>) -> Result<(), GitError> {
+        let head_ref = self.obj_store.read_ref(HEAD)?;
+        println!("head_ref: {:?}", head_ref);
+
+        let refer = Reference::new_from_target(ReferenceName::head(), head_ref);
+        let commit_hash = base16ct::lower::encode_string(hash);
+        if refer.is_symbolic() {
+            let target_ref = refer.target.unwrap();
+            println!(
+                "updating symbolic HEAD reference: {} to hash: {:?}",
+                target_ref, hash
+            );
+            self.obj_store
+                .write_ref(&target_ref.to_string(), &commit_hash)?;
+        } else {
+            println!("updating HEAD reference to hash: {:?}", hash);
+            self.obj_store.write_ref(HEAD, &commit_hash)?;
+        }
+
+        Ok(())
+    }
+
     pub fn add(&mut self, add_file: &str) -> Result<(), GitError> {
         let file_path = self.root_path.clone() + "/" + add_file;
         println!("file_path: {}", file_path);
@@ -67,7 +91,9 @@ impl Worktree {
 
         let mut idx_files = Vec::new();
         for add_file in files {
-            let file_path = self.git_dir_path.clone() + "/" + add_file;
+            println!("add_file: {}", add_file);
+
+            let file_path = self.root_path.clone() + "/" + add_file;
             let mut file = File::open(&file_path)?;
             let mut content = Vec::new();
             file.read_to_end(&mut content)?;
@@ -163,6 +189,13 @@ impl Worktree {
         let idx = self.read_index()?;
         let working_dir = self.root_path.clone();
         let status = detect_changes(&idx, working_dir.as_str())?;
+
+        println!(
+            "auto add files - modified: {:?}, added: {:?}, deleted: {:?}",
+            status.modified(),
+            status.added(),
+            status.deleted()
+        );
 
         self.add_files(
             status

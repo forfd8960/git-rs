@@ -100,7 +100,13 @@ pub struct Commit {
 }
 
 impl Commit {
-    pub fn new(msg: &str, tree_hash: Vec<u8>, parent_hashes: Vec<Vec<u8>>, author: Signature, committer: Signature) -> Self {
+    pub fn new(
+        msg: &str,
+        tree_hash: Vec<u8>,
+        parent_hashes: Vec<Vec<u8>>,
+        author: Signature,
+        committer: Signature,
+    ) -> Self {
         Commit {
             hash: vec![],
             author,
@@ -226,6 +232,13 @@ impl Commit {
         self.message = message_lines.join("\n").trim().to_string();
         Ok(())
     }
+}
+
+pub fn encode_commit(data: Vec<u8>) -> Vec<u8> {
+    let header = format!("{} {}\0", object::OBJ_COMMIT_HEADER, data.len());
+    let mut commit_bs = header.as_bytes().to_vec();
+    commit_bs.extend_from_slice(data.as_slice());
+    commit_bs
 }
 
 #[cfg(test)]

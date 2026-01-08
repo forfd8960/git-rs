@@ -1,3 +1,5 @@
+use crate::plumbing::object::object_type_string;
+
 use super::object::object_type_bytes;
 use super::object::ObjectType;
 use sha1_checked::{Digest, Sha1};
@@ -44,22 +46,13 @@ impl From<Vec<u8>> for Hash {
 
 pub fn compute_hash(t: &ObjectType, content: &[u8]) -> Vec<u8> {
     let mut hasher = Sha1::new();
-    hasher.update(object_type_bytes(t));
-    hasher.update(b" ");
-    hasher.update(format!("{}", content.len()).as_bytes());
-    hasher.update(b"\0");
-    hasher.update(content);
+    let header = format!("{} {}\0", object_type_string(t), content.len());
 
-    let hf = hasher.try_finalize();
-    let arr = hf.hash();
-    arr.to_vec()
-}
+    let mut full = Vec::new();
+    full.extend(header.as_bytes());
+    full.extend(content);
 
-
-pub fn compute_hash_without_type( content: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha1::new();
-    hasher.update(content);
-
+    hasher.update(&full);
     let hf = hasher.try_finalize();
     let arr = hf.hash();
     arr.to_vec()
