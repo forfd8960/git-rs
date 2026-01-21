@@ -70,8 +70,8 @@ impl Worktree {
         Ok(())
     }
 
-    pub fn add(&mut self, add_file: &str) -> Result<(), GitError> {
-        let file_path = self.root_path.clone() + "/" + add_file;
+    pub fn add(&mut self, path_spec: &str) -> Result<(), GitError> {
+        let file_path = self.root_path.clone() + "/" + path_spec;
         println!("file_path: {}", file_path);
 
         let mut file = File::open(&file_path)?;

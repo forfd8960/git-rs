@@ -12,21 +12,17 @@ use super::GitSubCommand;
 pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
     let current_dir = env::current_dir().unwrap();
 
+    let mut worktree = Worktree::new(current_dir.to_str().unwrap());
+
     match cmd {
         GitSubCommand::Init(opts) => {
             println!("init repo options: {:?}", opts);
-
-            let current_dir = env::current_dir().unwrap();
             let repo = Repository::new(current_dir.to_str().unwrap());
             repo.init()?;
         }
         GitSubCommand::Add(opts) => {
             println!("add file options: {:?}", opts);
-            let current_dir = env::current_dir().unwrap();
-            let root = current_dir.to_str().unwrap();
-
-            let mut work_tree = Worktree::new(root);
-            work_tree.add(&opts.path_spec)?
+            worktree.add(&opts.path_spec)?
         }
         GitSubCommand::Commit(opts) => {
             todo!()
@@ -42,9 +38,7 @@ pub fn handle_command(cmd: &GitSubCommand) -> anyhow::Result<()> {
         }
 
         GitSubCommand::ReadIndex => {
-            let root = current_dir.to_str().unwrap();
-            let work_tree = Worktree::new(root);
-            let idx = work_tree.read_index()?;
+            let idx = worktree.read_index()?;
             println!("{:?}", idx);
         }
         GitSubCommand::Config(opts) => {
